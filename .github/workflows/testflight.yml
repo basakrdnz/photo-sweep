@@ -1,13 +1,17 @@
 name: TestFlight
 
-# Actions sekmesinden elle başlatılır. Gereken gizli değerler DAGITIM.md'de.
+# Actions sekmesinden elle ya da commit mesajında [testflight] geçen bir
+# gönderimle başlar. Gereken gizli değerler DAGITIM.md'de.
 on:
   workflow_dispatch:
+  push:
+    branches: [main, 'claude/**']
 
 jobs:
   upload:
     name: Derle ve TestFlight'a yükle
     runs-on: macos-15
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]')
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
