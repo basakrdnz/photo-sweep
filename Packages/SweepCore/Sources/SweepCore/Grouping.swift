@@ -12,6 +12,12 @@ public struct SimilarityGroup: Sendable, Equatable, Identifiable {
     /// En iyiden en kötüye sıralı; ilk eleman saklanması önerilen fotoğraf.
     public let memberIDs: [String]
 
+    public init(kind: GroupKind, memberIDs: [String]) {
+        precondition(!memberIDs.isEmpty)
+        self.kind = kind
+        self.memberIDs = memberIDs
+    }
+
     public var id: String { memberIDs[0] }
     public var suggestedKeepID: String { memberIDs[0] }
 }
