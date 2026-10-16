@@ -10,7 +10,7 @@ on:
 jobs:
   upload:
     name: Derle ve TestFlight'a yükle
-    runs-on: macos-15
+    runs-on: macos-26
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[testflight]')
     steps:
       - uses: actions/checkout@v4
