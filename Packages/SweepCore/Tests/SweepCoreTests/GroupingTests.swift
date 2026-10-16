@@ -67,6 +67,30 @@ private func record(
         #expect(Set(groups[0].memberIDs) == ["a", "b", "c"])
     }
 
+    @Test func longChainIsSplit() {
+        // Her kare bir öncekine benziyor ama ilk ve son kare çok farklı.
+        let groups = Grouper.group((0..<12).map { step in
+            record("p\(step)", seconds: Double(step) * 30, features: [Float(step) * 0.4])
+        })
+        #expect(groups.count > 1)
+        for group in groups {
+            let positions = group.memberIDs.map { Int($0.dropFirst())! }
+            #expect(positions.max()! - positions.min()! <= 3)
+        }
+    }
+
+    @Test func duplicatesStayTogetherWhenChainSplits() {
+        let groups = Grouper.group([
+            record("a", seconds: 0, hash: 1, features: [0.0]),
+            record("b", seconds: 30, hash: 0xF0F0, features: [0.4]),
+            record("c", seconds: 60, hash: 0xFF00_FF00, features: [0.8]),
+            record("d", seconds: 90, hash: 0xFFFF_0000_FFFF_0000, features: [1.2]),
+            record("d-copy", seconds: 86_400, hash: 0xFFFF_0000_FFFF_0000, features: [9]),
+        ])
+        let withD = groups.first { $0.memberIDs.contains("d") }
+        #expect(withD?.memberIDs.contains("d-copy") == true)
+    }
+
     @Test func mixedGroupIsSimilar() {
         let groups = Grouper.group([
             record("a", seconds: 0, hash: 7, features: [0]),
@@ -95,6 +119,18 @@ private func record(
             record("y3", seconds: 1_002, features: [0]),
         ])
         #expect(groups.map(\.memberIDs.count) == [3, 2])
+    }
+}
+
+@Suite struct BlurCheckTests {
+    @Test func lowSharpnessIsBlurry() {
+        #expect(BlurCheck.isLikelyBlurry(record("a", quality: QualitySignals(sharpness: 3))))
+        #expect(!BlurCheck.isLikelyBlurry(record("b", quality: QualitySignals(sharpness: 400))))
+    }
+
+    @Test func favoritesAndUnmeasuredAreNeverFlagged() {
+        #expect(!BlurCheck.isLikelyBlurry(record("a", quality: QualitySignals(sharpness: 3, isFavorite: true))))
+        #expect(!BlurCheck.isLikelyBlurry(record("b")))
     }
 }
 

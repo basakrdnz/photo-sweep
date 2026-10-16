@@ -19,12 +19,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.basakrdnz.photosweep
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "0.2.0"
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photography
         INFOPLIST_KEY_CFBundleDisplayName: Photo Sweep
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Kopya ve benzer fotoğrafları bulmak ve seçtiklerinizi silmek için fotoğraflarınıza erişim gerekiyor. Analiz tamamen telefonda yapılır."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

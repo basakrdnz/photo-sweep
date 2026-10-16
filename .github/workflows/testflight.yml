@@ -1,0 +1,58 @@
+name: TestFlight
+
+# Actions sekmesinden elle başlatılır. Gereken gizli değerler DAGITIM.md'de.
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    name: Derle ve TestFlight'a yükle
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+
+      - name: App Store Connect anahtarını yaz
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey.p8"
+
+      - name: Arşivle
+        run: >
+          xcodebuild archive
+          -project PhotoSweep.xcodeproj
+          -scheme PhotoSweep
+          -destination 'generic/platform=iOS'
+          -archivePath "$RUNNER_TEMP/PhotoSweep.xcarchive"
+          -allowProvisioningUpdates
+          -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8"
+          -authenticationKeyID "${{ secrets.ASC_KEY_ID }}"
+          -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+          DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}"
+          CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+
+      - name: Yükle
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/PhotoSweep.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"

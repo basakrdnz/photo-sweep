@@ -90,12 +90,19 @@ public enum Grouper {
             }
         }
 
-        var members: [Int: [Int]] = [:]
+        // Önce kopya kümeleri birim olur; benzerlik bileşenleri bu birimlerden oluşur.
+        var unitsByComponent: [Int: [Int: [Int]]] = [:]
         for index in records.indices {
-            members[similar.find(index), default: []].append(index)
+            unitsByComponent[similar.find(index), default: [:]][duplicates.find(index), default: []]
+                .append(index)
         }
 
-        return members.values
+        var clusters: [[Int]] = []
+        for units in unitsByComponent.values {
+            clusters += split(Array(units.values), records: records, options: options)
+        }
+
+        return clusters
             .filter { $0.count > 1 }
             .map { indices in
                 let allDuplicates = Set(indices.map { duplicates.find($0) }).count == 1
@@ -110,6 +117,44 @@ public enum Grouper {
                     ? lhs.memberIDs.count > rhs.memberIDs.count
                     : lhs.id < rhs.id
             }
+    }
+
+    /// Zincirleme bağlanmış uzun bir bileşeni böler: gün batımı yürüyüşünde
+    /// her kare bir öncekine benzer ama ilk ve son kare bambaşkadır. Birimler
+    /// zaman sırasıyla gezilir; bir birim, son kümedeki birimlerin en az
+    /// yarısına benziyorsa o kümeye katılır, yoksa yeni küme başlatır.
+    /// Kopya birimleri hiç bölünmez.
+    private static func split(
+        _ units: [[Int]],
+        records: [PhotoRecord],
+        options: GroupingOptions
+    ) -> [[Int]] {
+        guard units.count > 2 else { return [units.flatMap { $0 }] }
+
+        func earliest(_ unit: [Int]) -> Date {
+            unit.compactMap { records[$0].creationDate }.min() ?? .distantFuture
+        }
+        let ordered = units
+            .map { (unit: $0, date: earliest($0)) }
+            .sorted { $0.date != $1.date ? $0.date < $1.date : $0.unit[0] < $1.unit[0] }
+            .map(\.unit)
+
+        func unitsAreSimilar(_ a: [Int], _ b: [Int]) -> Bool {
+            a.contains { i in b.contains { j in areSimilar(records[i], records[j], options: options) } }
+        }
+
+        var clusters: [[[Int]]] = []
+        for unit in ordered {
+            if let last = clusters.last {
+                let matches = last.filter { unitsAreSimilar($0, unit) }.count
+                if matches * 2 >= last.count {
+                    clusters[clusters.count - 1].append(unit)
+                    continue
+                }
+            }
+            clusters.append([unit])
+        }
+        return clusters.map { $0.flatMap { $0 } }
     }
 
     private static func areSimilar(

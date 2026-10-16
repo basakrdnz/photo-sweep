@@ -20,6 +20,23 @@ enum PhotoLibrary {
         return assets
     }
 
+    /// Tüm videolar.
+    static func fetchVideoAssets() -> [PHAsset] {
+        let result = PHAsset.fetchAssets(with: .video, options: nil)
+        var assets: [PHAsset] = []
+        assets.reserveCapacity(result.count)
+        result.enumerateObjects { asset, _, _ in assets.append(asset) }
+        return assets
+    }
+
+    /// Telefonda kapladığı alan (düzenlenmiş sürümler dahil tüm kaynaklar).
+    /// iCloud'da optimize edilmiş öğelerde tam boyut döner.
+    static func fileSize(of asset: PHAsset) -> Int64 {
+        PHAssetResource.assetResources(for: asset).reduce(0) { total, resource in
+            total + ((resource.value(forKey: "fileSize") as? Int64) ?? 0)
+        }
+    }
+
     static func assets(withIDs ids: [String]) -> [PHAsset] {
         let result = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
         var assets: [PHAsset] = []
