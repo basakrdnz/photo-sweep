@@ -10,8 +10,11 @@ struct CachedAnalysis: Codable, Sendable {
     /// Feature print, ham Float baytları olarak (plist'te binlerce nesne yerine tek blok).
     var features: Data?
     var sharpness: Double?
+    var focus: Double?
+    var contrast: Double?
     var faceQuality: Double?
     var aesthetics: Double?
+    var labels: [String: Float]
 
     init(modified: Date?, result: ImageAnalyzer.Result) {
         self.modified = modified
@@ -20,6 +23,9 @@ struct CachedAnalysis: Codable, Sendable {
             vector.values.withUnsafeBufferPointer { Data(buffer: $0) }
         }
         sharpness = result.sharpness
+        focus = result.focus
+        contrast = result.contrast
+        labels = result.labels
         faceQuality = result.faceQuality
         aesthetics = result.aesthetics
     }
@@ -36,7 +42,7 @@ struct CachedAnalysis: Codable, Sendable {
 /// Analiz sonuçlarını Application Support altında tek dosyada tutar.
 enum AnalysisCache {
     /// Analiz yöntemi değişirse artırılır; eski önbellek yok sayılır.
-    private static let version = 1
+    private static let version = 2
 
     private struct Payload: Codable {
         var version: Int

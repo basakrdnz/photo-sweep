@@ -38,8 +38,8 @@ public struct GroupingOptions: Sendable, Equatable {
     public init(
         duplicateHashDistance: Int = 4,
         similarTimeWindow: TimeInterval = 120,
-        similarHashDistance: Int = 10,
-        similarFeatureDistance: Float = 0.5,
+        similarHashDistance: Int = 8,
+        similarFeatureDistance: Float = 0.4,
         aspectRatioTolerance: Double = 0.02
     ) {
         self.duplicateHashDistance = duplicateHashDistance
@@ -72,7 +72,8 @@ public enum Grouper {
             for second in hashed.indices[(first + 1)...] {
                 let (j, hashB) = hashed[second]
                 if DifferenceHash.distance(hashA, hashB) <= options.duplicateHashDistance,
-                   aspectRatiosMatch(records[i], records[j], tolerance: options.aspectRatioTolerance) {
+                   aspectRatiosMatch(records[i], records[j], tolerance: options.aspectRatioTolerance),
+                   featuresAgree(records[i], records[j], options: options) {
                     duplicates.union(i, j)
                     similar.union(i, j)
                 }
@@ -168,16 +169,28 @@ public enum Grouper {
         _ b: PhotoRecord,
         options: GroupingOptions
     ) -> Bool {
+        // Feature print varsa karar onundur; dHash sahne içeriğini kaba
+        // ölçtüğü için iki fotoğrafı tek başına benzer saymaya yetmez.
         if let featuresA = a.features, let featuresB = b.features,
-           let distance = featuresA.distance(to: featuresB),
-           distance <= options.similarFeatureDistance {
-            return true
+           let distance = featuresA.distance(to: featuresB) {
+            return distance <= options.similarFeatureDistance
         }
-        if let hashA = a.differenceHash, let hashB = b.differenceHash,
-           DifferenceHash.distance(hashA, hashB) <= options.similarHashDistance {
-            return true
+        if let hashA = a.differenceHash, let hashB = b.differenceHash {
+            return DifferenceHash.distance(hashA, hashB) <= options.similarHashDistance
         }
         return false
+    }
+
+    /// Karanlık ya da düz karelerin dHash'i rastlantıyla tutabilir; feature
+    /// print varsa kopya için içeriğin de benzer olması şart.
+    private static func featuresAgree(
+        _ a: PhotoRecord,
+        _ b: PhotoRecord,
+        options: GroupingOptions
+    ) -> Bool {
+        guard let featuresA = a.features, let featuresB = b.features,
+              let distance = featuresA.distance(to: featuresB) else { return true }
+        return distance <= options.similarFeatureDistance
     }
 
     private static func aspectRatiosMatch(

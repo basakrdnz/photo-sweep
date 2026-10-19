@@ -9,6 +9,8 @@ public struct PhotoRecord: Sendable, Equatable, Identifiable {
     public let differenceHash: UInt64?
     public let features: FeatureVector?
     public let quality: QualitySignals
+    /// Cihazdaki sınıflandırıcının etiketleri ve güvenleri (yalnızca ilgili olanlar).
+    public let labels: [String: Float]
 
     public init(
         id: String,
@@ -17,7 +19,8 @@ public struct PhotoRecord: Sendable, Equatable, Identifiable {
         pixelHeight: Int,
         differenceHash: UInt64?,
         features: FeatureVector?,
-        quality: QualitySignals = QualitySignals()
+        quality: QualitySignals = QualitySignals(),
+        labels: [String: Float] = [:]
     ) {
         self.id = id
         self.creationDate = creationDate
@@ -26,6 +29,7 @@ public struct PhotoRecord: Sendable, Equatable, Identifiable {
         self.differenceHash = differenceHash
         self.features = features
         self.quality = quality
+        self.labels = labels
     }
 
     var pixelCount: Int { pixelWidth * pixelHeight }
@@ -45,15 +49,23 @@ public struct QualitySignals: Sendable, Equatable {
     public var faceQuality: Double?
     /// Sistemin estetik puanı (-1...1); iOS 18 öncesinde nil.
     public var aesthetics: Double?
+    /// En net bölgenin Laplace varyansı (bkz. Sharpness.focus).
+    public var focus: Double?
+    /// Parlaklığın standart sapması.
+    public var contrast: Double?
     public var isFavorite: Bool
 
     public init(
         sharpness: Double? = nil,
+        focus: Double? = nil,
+        contrast: Double? = nil,
         faceQuality: Double? = nil,
         aesthetics: Double? = nil,
         isFavorite: Bool = false
     ) {
         self.sharpness = sharpness
+        self.focus = focus
+        self.contrast = contrast
         self.faceQuality = faceQuality
         self.aesthetics = aesthetics
         self.isFavorite = isFavorite

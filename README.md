@@ -1,6 +1,6 @@
 # Photo Sweep
 
-iPhone'daki fotoğraf arşivini tarayıp kopya ve benzer fotoğrafları gruplayan, her grupta hangisinin saklanacağını öneren ve seçtiklerinizi silmenize yardım eden uygulama. Ekran görüntülerini, bulanık fotoğrafları ve büyük videoları da listeler; her kategoride açılacak alanı gösterir.
+iPhone'daki fotoğraf arşivini tarayıp kopya ve benzer fotoğrafları gruplayan, her grupta hangisinin saklanacağını öneren ve seçtiklerinizi silmenize yardım eden uygulama. Ekran görüntülerini, bulanık fotoğrafları, yemek ve manzara fotoğraflarını ve büyük videoları da listeler; her kategoride açılacak alanı gösterir. Sonuçlar tarih aralığına göre süzülebilir.
 
 Arkadaşlara dağıtım: [DAGITIM.md](DAGITIM.md).
 
@@ -11,9 +11,10 @@ Arkadaşlara dağıtım: [DAGITIM.md](DAGITIM.md).
 
 | Katman | Neyi bulur | Yöntem | Nerede aranır |
 |---|---|---|---|
-| Kopya | Aynı fotoğrafın kopyası, küçültülmüş ya da sıkıştırılmış hali | 64 bit görsel parmak izi (dHash), en fazla 4 bit fark, aynı en-boy oranı | Tüm arşiv |
-| Benzer | Aynı sahneden art arda çekilmiş kareler | Vision feature print uzaklığı ya da yakın dHash; uzun zincirler kümenin en az yarısına benzerlik şartıyla bölünür | Aralarında en fazla 2 dakika olan fotoğraflar |
-| Bulanık | Ciddi biçimde bulanık kareler | 256 piksellik önizlemede Laplace varyansı eşiği; favoriler hariç, otomatik seçilmez | Tüm arşiv |
+| Kopya | Aynı fotoğrafın kopyası, küçültülmüş ya da sıkıştırılmış hali | 64 bit görsel parmak izi (dHash), en fazla 4 bit fark, aynı en-boy oranı; feature print varsa o da yakın olmalı | Tüm arşiv |
+| Benzer | Aynı sahneden art arda çekilmiş kareler | Vision feature print uzaklığı (yoksa yakın dHash); uzun zincirler kümenin en az yarısına benzerlik şartıyla bölünür | Aralarında en fazla 2 dakika olan fotoğraflar |
+| Bulanık | Her yeri bulanık kareler | 256 piksellik önizlemenin 4x4 bölgesinden en netinin Laplace varyansı; düşük kontrastlı (düz) kareler ve favoriler hariç, otomatik seçilmez | Tüm arşiv |
+| Yemek, Manzara | İçerik | Cihazdaki Vision sınıflandırıcısının etiketleri; içinde yüz olan kareler manzara sayılmaz, otomatik seçilmez | Tüm arşiv |
 
 Her grupta öneri şu sinyallerle yapılır: favori olmak, netlik (Laplace varyansı), yüz çekim kalitesi, estetik puanı (iOS 18+) ve çözünürlük. Ayrıntılar: [Packages/SweepCore/Sources/SweepCore/BestPicker.swift](Packages/SweepCore/Sources/SweepCore/BestPicker.swift).
 

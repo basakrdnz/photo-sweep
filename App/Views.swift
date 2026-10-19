@@ -41,6 +41,14 @@ struct ContentView: View {
             }
             .navigationTitle("Photo Sweep")
         }
+        .disabled(model.isDeleting)
+        .overlay {
+            if model.isDeleting {
+                ProgressView("Siliniyor…")
+                    .padding(24)
+                    .background(.regularMaterial, in: .rect(cornerRadius: 12))
+            }
+        }
         .alert(
             "Hata",
             isPresented: Binding(
@@ -112,13 +120,24 @@ private struct SummaryView: View {
     @Environment(ScanModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         List {
+            Section("Tarih") {
+                Picker("Aralık", selection: $model.dateFilter) {
+                    ForEach(DateFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                if model.dateFilter == .custom {
+                    DatePicker("Başlangıç", selection: $model.customStart, in: ...Date.now, displayedComponents: .date)
+                    DatePicker("Bitiş", selection: $model.customEnd, in: ...Date.now, displayedComponents: .date)
+                }
+            }
+
             Section {
-                let selected = model.totalSize(of: model.selectedForDeletion)
+                let selection = model.visibleSelection
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(formatBytes(selected))
+                    Text(formatBytes(model.totalSize(of: selection)))
                         .font(.largeTitle.bold())
-                    Text("seçili \(model.selectedCount) öğe silinirse açılacak alan")
+                    Text("seçili \(selection.count) öğe silinirse açılacak alan")
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
@@ -155,7 +174,7 @@ private struct SummaryView: View {
                 ) {
                     GroupsListView(kind: .similar)
                 }
-                ForEach([FlatCategory.screenshots, .blurry, .largeVideos], id: \.self) { category in
+                ForEach([FlatCategory.screenshots, .blurry, .food, .landscape, .largeVideos], id: \.self) { category in
                     let ids = model.ids(for: category)
                     CategoryRow(
                         title: category.title,
@@ -177,10 +196,6 @@ private struct SummaryView: View {
             Button("Yeniden tara") { model.startScan() }
         }
     }
-}
-
-private extension ScanModel {
-    var selectedCount: Int { selectedForDeletion.count }
 }
 
 private struct CategoryRow<Destination: View>: View {

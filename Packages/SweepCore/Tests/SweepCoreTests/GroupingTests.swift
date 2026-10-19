@@ -85,10 +85,18 @@ private func record(
             record("b", seconds: 30, hash: 0xF0F0, features: [0.4]),
             record("c", seconds: 60, hash: 0xFF00_FF00, features: [0.8]),
             record("d", seconds: 90, hash: 0xFFFF_0000_FFFF_0000, features: [1.2]),
-            record("d-copy", seconds: 86_400, hash: 0xFFFF_0000_FFFF_0000, features: [9]),
+            record("d-copy", seconds: 86_400, hash: 0xFFFF_0000_FFFF_0000, features: [1.2]),
         ])
         let withD = groups.first { $0.memberIDs.contains("d") }
         #expect(withD?.memberIDs.contains("d-copy") == true)
+    }
+
+    @Test func closeHashDoesNotOverrideDistantFeatures() {
+        let groups = Grouper.group([
+            record("a", seconds: 0, hash: 0, features: [0]),
+            record("b", seconds: 5, hash: 0b111, features: [2]),
+        ])
+        #expect(groups.isEmpty)
     }
 
     @Test func mixedGroupIsSimilar() {
@@ -123,6 +131,14 @@ private func record(
 }
 
 @Suite struct BlurCheckTests {
+    @Test func blurryOnlyWhenEveryRegionIsSoft() {
+        #expect(BlurCheck.isLikelyBlurry(record("a", quality: QualitySignals(focus: 5, contrast: 40))))
+        // Konusu net, arka planı bulanık portre.
+        #expect(!BlurCheck.isLikelyBlurry(record("b", quality: QualitySignals(sharpness: 3, focus: 300, contrast: 40))))
+        // Düz gökyüzü: kontrast düşük, değerlendirilmez.
+        #expect(!BlurCheck.isLikelyBlurry(record("c", quality: QualitySignals(focus: 2, contrast: 5))))
+    }
+
     @Test func lowSharpnessIsBlurry() {
         #expect(BlurCheck.isLikelyBlurry(record("a", quality: QualitySignals(sharpness: 3))))
         #expect(!BlurCheck.isLikelyBlurry(record("b", quality: QualitySignals(sharpness: 400))))
@@ -131,6 +147,31 @@ private func record(
     @Test func favoritesAndUnmeasuredAreNeverFlagged() {
         #expect(!BlurCheck.isLikelyBlurry(record("a", quality: QualitySignals(sharpness: 3, isFavorite: true))))
         #expect(!BlurCheck.isLikelyBlurry(record("b")))
+    }
+}
+
+@Suite struct ContentCategoryTests {
+    @Test func foodLabelsMatch() {
+        let pizza = PhotoRecord(id: "p", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
+                                differenceHash: nil, features: nil, labels: ["food": 0.9])
+        #expect(ContentCategory.food.matches(pizza))
+        #expect(!ContentCategory.landscape.matches(pizza))
+    }
+
+    @Test func lowConfidenceIsIgnored() {
+        let maybe = PhotoRecord(id: "m", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
+                                differenceHash: nil, features: nil, labels: ["food": 0.2])
+        #expect(!ContentCategory.food.matches(maybe))
+    }
+
+    @Test func landscapeWithPeopleIsNotLandscape() {
+        let selfie = PhotoRecord(id: "s", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
+                                 differenceHash: nil, features: nil,
+                                 quality: QualitySignals(faceQuality: 0.7), labels: ["beach": 0.9])
+        let view = PhotoRecord(id: "v", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
+                               differenceHash: nil, features: nil, labels: ["beach": 0.9])
+        #expect(!ContentCategory.landscape.matches(selfie))
+        #expect(ContentCategory.landscape.matches(view))
     }
 }
 

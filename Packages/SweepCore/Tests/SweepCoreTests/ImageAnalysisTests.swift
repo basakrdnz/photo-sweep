@@ -101,3 +101,22 @@ func boxBlur(_ image: GrayImage) -> GrayImage {
         #expect(FeatureVector([1, 2]).distance(to: FeatureVector([1, 2, 3])) == nil)
     }
 }
+
+@Suite struct FocusTests {
+    @Test func sharpSubjectOnBlurryBackgroundKeepsFocus() {
+        let sharp = makeImage(width: 128, height: 128) { x, y in ((x / 2 + y / 2) % 2) * 255 }
+        let blurred = boxBlur(boxBlur(scene(width: 128, height: 128, seed: 1)))
+        // Sol üst çeyrek net, gerisi bulanık.
+        let mixed = makeImage(width: 128, height: 128) { x, y in
+            x < 32 && y < 32 ? Int(sharp[x, y]) : Int(blurred[x, y])
+        }
+        #expect(Sharpness.focus(mixed) > 10 * Sharpness.focus(blurred))
+    }
+
+    @Test func flatImageHasNoContrast() {
+        let flat = makeImage(width: 64, height: 64) { _, _ in 120 }
+        #expect(Sharpness.contrast(flat) == 0)
+        let stripes = makeImage(width: 64, height: 64) { x, _ in x % 2 == 0 ? 0 : 255 }
+        #expect(Sharpness.contrast(stripes) > 100)
+    }
+}

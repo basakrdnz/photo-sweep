@@ -3,16 +3,39 @@ import Photos
 import SweepCore
 
 /// Tek tek listelenen (gruplanmayan) temizlik kategorileri.
+/// Sonuçları çekim tarihine göre süzmek için.
+enum DateFilter: Hashable, CaseIterable {
+    case all
+    case lastMonth
+    case lastYear
+    case olderThanYear
+    case custom
+
+    var title: String {
+        switch self {
+        case .all: "Tüm zamanlar"
+        case .lastMonth: "Son 1 ay"
+        case .lastYear: "Son 1 yıl"
+        case .olderThanYear: "1 yıldan eski"
+        case .custom: "Özel aralık"
+        }
+    }
+}
+
 enum FlatCategory: Hashable {
     case screenshots
     case blurry
     case largeVideos
+    case food
+    case landscape
 
     var title: String {
         switch self {
         case .screenshots: "Ekran görüntüleri"
         case .blurry: "Bulanık olabilir"
         case .largeVideos: "Büyük videolar"
+        case .food: "Yemek"
+        case .landscape: "Manzara"
         }
     }
 
@@ -21,6 +44,8 @@ enum FlatCategory: Hashable {
         case .screenshots: "camera.viewfinder"
         case .blurry: "aqi.low"
         case .largeVideos: "video"
+        case .food: "fork.knife"
+        case .landscape: "mountain.2"
         }
     }
 }
@@ -41,6 +66,13 @@ final class ScanModel {
     private(set) var screenshotIDs: [String] = []
     private(set) var blurryIDs: [String] = []
     private(set) var largeVideoIDs: [String] = []
+    private(set) var foodIDs: [String] = []
+    private(set) var landscapeIDs: [String] = []
+    /// Silme sürerken arayüz kilitlenir ve ilerleme gösterilir.
+    private(set) var isDeleting = false
+    var dateFilter: DateFilter = .all
+    var customStart = Calendar.current.date(byAdding: .month, value: -1, to: .now) ?? .now
+    var customEnd = Date.now
     private(set) var records: [String: PhotoRecord] = [:]
     private(set) var assets: [String: PHAsset] = [:]
     /// Bayt cinsinden boyut; yalnızca temizlik adayları ve videolar için.
@@ -72,16 +104,59 @@ final class ScanModel {
         scanTask?.cancel()
     }
 
+    /// Seçili tarih aralığı; nil ise süzme yok.
+    private var dateRange: ClosedRange<Date>? {
+        let calendar = Calendar.current
+        let now = Date.now
+        switch dateFilter {
+        case .all:
+            return nil
+        case .lastMonth:
+            return (calendar.date(byAdding: .month, value: -1, to: now) ?? now)...now
+        case .lastYear:
+            return (calendar.date(byAdding: .year, value: -1, to: now) ?? now)...now
+        case .olderThanYear:
+            return .distantPast...(calendar.date(byAdding: .year, value: -1, to: now) ?? now)
+        case .custom:
+            let start = calendar.startOfDay(for: min(customStart, customEnd))
+            let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: max(customStart, customEnd))) ?? now
+            return start...end
+        }
+    }
+
+    private func isVisible(_ id: String, in range: ClosedRange<Date>?) -> Bool {
+        guard let range else { return true }
+        guard let date = assets[id]?.creationDate else { return false }
+        return range.contains(date)
+    }
+
+    /// Tarih süzgecinden geçen gruplar; aralık dışındaki üyeler gruptan çıkar.
     func groups(of kind: GroupKind) -> [SimilarityGroup] {
-        groups.filter { $0.kind == kind }
+        let range = dateRange
+        return groups.compactMap { group in
+            guard group.kind == kind else { return nil }
+            guard range != nil else { return group }
+            let members = group.memberIDs.filter { isVisible($0, in: range) }
+            return members.count > 1 ? SimilarityGroup(kind: kind, memberIDs: members) : nil
+        }
     }
 
     func ids(for category: FlatCategory) -> [String] {
-        switch category {
+        let all: [String] = switch category {
         case .screenshots: screenshotIDs
         case .blurry: blurryIDs
         case .largeVideos: largeVideoIDs
+        case .food: foodIDs
+        case .landscape: landscapeIDs
         }
+        let range = dateRange
+        return range == nil ? all : all.filter { isVisible($0, in: range) }
+    }
+
+    /// Seçili olup tarih süzgecinden geçenler.
+    var visibleSelection: [String] {
+        let range = dateRange
+        return selectedForDeletion.filter { isVisible($0, in: range) }
     }
 
     func totalSize(of ids: some Sequence<String>) -> Int64 {
@@ -108,6 +183,8 @@ final class ScanModel {
     func deleteSelected(among ids: [String]) async {
         let targets = selectedForDeletion.intersection(ids)
         guard !targets.isEmpty else { return }
+        isDeleting = true
+        defer { isDeleting = false }
         do {
             let bytes = totalSize(of: targets)
             try await PhotoLibrary.delete(ids: Array(targets))
@@ -194,9 +271,12 @@ final class ScanModel {
             .filter { !screenshotSet.contains($0.id) && BlurCheck.isLikelyBlurry($0) }
             .sorted { ($0.quality.sharpness ?? 0) < ($1.quality.sharpness ?? 0) }
             .map(\.id)
+        foodIDs = analyzed.reversed().filter { ContentCategory.food.matches($0) }.map(\.id)
+        landscapeIDs = analyzed.reversed().filter { ContentCategory.landscape.matches($0) }.map(\.id)
         selectedForDeletion = defaultSelection(for: groups)
 
-        let candidates = Set(groups.flatMap(\.memberIDs)).union(screenshotIDs).union(blurryIDs)
+        let candidates = Set(groups.flatMap(\.memberIDs))
+            .union(screenshotIDs).union(blurryIDs).union(foodIDs).union(landscapeIDs)
         let sizeTargets = candidates.compactMap { assets[$0] } + videos
         sizes = await Task.detached(priority: .userInitiated) {
             Dictionary(
@@ -221,6 +301,8 @@ final class ScanModel {
         screenshotIDs.removeAll(where: removed.contains)
         blurryIDs.removeAll(where: removed.contains)
         largeVideoIDs.removeAll(where: removed.contains)
+        foodIDs.removeAll(where: removed.contains)
+        landscapeIDs.removeAll(where: removed.contains)
     }
 
     /// Önerilen dışındakiler seçili gelir; favoriler asla otomatik seçilmez.
@@ -250,10 +332,13 @@ final class ScanModel {
             features: analysis.featureVector,
             quality: QualitySignals(
                 sharpness: analysis.sharpness,
+                focus: analysis.focus,
+                contrast: analysis.contrast,
                 faceQuality: analysis.faceQuality,
                 aesthetics: analysis.aesthetics,
                 isFavorite: asset.isFavorite
-            )
+            ),
+            labels: analysis.labels
         )
     }
 }

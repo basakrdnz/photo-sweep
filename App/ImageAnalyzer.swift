@@ -9,7 +9,11 @@ enum ImageAnalyzer {
         var differenceHash: UInt64?
         var features: FeatureVector?
         var sharpness: Double?
+        var focus: Double?
+        var contrast: Double?
         var faceQuality: Double?
+        /// Yalnızca içerik kategorilerinde kullanılan etiketler.
+        var labels: [String: Float] = [:]
         var aesthetics: Double?
     }
 
@@ -18,13 +22,20 @@ enum ImageAnalyzer {
         if let gray = grayImage(from: image) {
             result.differenceHash = DifferenceHash.compute(gray)
             result.sharpness = Sharpness.laplacianVariance(gray)
+            result.focus = Sharpness.focus(gray)
+            result.contrast = Sharpness.contrast(gray)
         }
 
         let featureRequest = VNGenerateImageFeaturePrintRequest()
         let faceRequest = VNDetectFaceCaptureQualityRequest()
+        let classifyRequest = VNClassifyImageRequest()
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         do {
-            try handler.perform([featureRequest, faceRequest])
+            try handler.perform([featureRequest, faceRequest, classifyRequest])
+            for observation in classifyRequest.results ?? []
+            where observation.confidence >= 0.3 && ContentCategory.allIdentifiers.contains(observation.identifier) {
+                result.labels[observation.identifier] = observation.confidence
+            }
             if let observation = featureRequest.results?.first {
                 result.features = featureVector(from: observation)
             }
