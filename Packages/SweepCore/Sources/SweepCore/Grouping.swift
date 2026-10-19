@@ -13,7 +13,7 @@ public struct SimilarityGroup: Sendable, Equatable, Identifiable {
     public let memberIDs: [String]
 
     public init(kind: GroupKind, memberIDs: [String]) {
-        precondition(!memberIDs.isEmpty)
+        precondition(!memberIDs.isEmpty, "Grup boş olamaz")
         self.kind = kind
         self.memberIDs = memberIDs
     }
