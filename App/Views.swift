@@ -100,17 +100,17 @@ private struct StartView: View {
     var body: some View {
         VStack(spacing: 32) {
             Spacer()
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.white)
-                .frame(width: 120, height: 120)
-                .background(
-                    LinearGradient(colors: [.blue, .teal], startPoint: .top, endPoint: .bottom),
-                    in: .rect(cornerRadius: 28)
-                )
+            Image("Mascot")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 150, height: 150)
+                .clipShape(.circle)
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+                .accessibilityHidden(true)
             VStack(spacing: 8) {
-                Text("Galerini temizle")
-                    .font(.largeTitle.bold())
+                Text("Başak'ın Photo Sweep uygulamasına hoş geldiniz 👋")
+                    .font(.title.bold())
+                    .multilineTextAlignment(.center)
                 Text("Kopyaları, benzer kareleri ve gereksiz fotoğrafları bulur, hangisini saklayacağını önerir.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
