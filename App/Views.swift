@@ -173,8 +173,9 @@ private struct LoopingVideo: UIViewRepresentable {
         let item = AVPlayerItem(url: url)
         let player = AVQueuePlayer()
         player.isMuted = true
-        // Arka planda çalan müziği kesmesin.
         player.preventsDisplaySleepDuringVideoPlayback = false
+        // Arka planda çalan müziği kesmesin.
+        try? AVAudioSession.sharedInstance().setCategory(.ambient)
         view.looper = AVPlayerLooper(player: player, templateItem: item)
         view.playerLayer.player = player
         view.playerLayer.videoGravity = .resizeAspect
