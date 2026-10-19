@@ -12,11 +12,13 @@ struct ContentView: View {
                 case .idle:
                     StartView()
                 case .denied:
-                    ContentUnavailableView(
-                        "Fotoğraflara erişim yok",
-                        systemImage: "lock",
-                        description: Text("Ayarlar > Gizlilik > Fotoğraflar'dan izin verebilirsiniz.")
-                    )
+                    ContentUnavailableView {
+                        Label("Fotoğraflara erişim yok", systemImage: "lock")
+                    } description: {
+                        Text("Taramak için Ayarlar'dan fotoğraflara erişim verin.")
+                    } actions: {
+                        OpenSettingsButton()
+                    }
                 case let .scanning(done, total):
                     VStack(spacing: 24) {
                         ProgressView(value: Double(done), total: Double(max(total, 1))) {
@@ -50,6 +52,30 @@ struct ContentView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+        .alert(
+            "Silindi",
+            isPresented: Binding(
+                get: { model.notice != nil },
+                set: { if !$0 { model.notice = nil } }
+            )
+        ) {
+            Button("Tamam", role: .cancel) {}
+        } message: {
+            Text(model.notice ?? "")
+        }
+    }
+}
+
+private struct OpenSettingsButton: View {
+    @Environment(\.openURL) private var openURL
+    var title = "Ayarları aç"
+
+    var body: some View {
+        Button(title) {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                openURL(url)
+            }
+        }
     }
 }
 
@@ -68,6 +94,13 @@ private struct StartView: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding(32)
+        .task {
+            // İzin daha önce verildiyse beklemeden tara; önbellek sayesinde hızlı.
+            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            if status == .authorized || status == .limited {
+                model.startScan()
+            }
+        }
     }
 }
 
@@ -90,6 +123,12 @@ private struct SummaryView: View {
                 }
                 .padding(.vertical, 4)
             } footer: {
+                if model.isLimitedAccess {
+                    VStack(alignment: .leading) {
+                        Text("Yalnızca seçtiğiniz fotoğraflara erişim var; kopyaların çoğu gözden kaçabilir.")
+                        OpenSettingsButton(title: "Tüm fotoğraflara izin ver")
+                    }
+                }
                 if model.wasCancelled {
                     Text("Tarama yarıda kesildi; sonuçlar taranan fotoğraflara göre. Yeniden tarayınca kaldığı yerden devam eder.")
                 }

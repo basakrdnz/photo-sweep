@@ -48,8 +48,12 @@ final class ScanModel {
     /// Telefonda önizlemesi olmadığı (yalnızca iCloud'da durduğu) için analiz edilemeyenler.
     private(set) var skippedCount = 0
     private(set) var wasCancelled = false
+    /// Kullanıcı yalnızca seçtiği fotoğraflara erişim verdiyse.
+    private(set) var isLimitedAccess = false
     var selectedForDeletion: Set<String> = []
     var errorMessage: String?
+    /// Silmeden sonra gösterilen bilgi.
+    var notice: String?
 
     private var scanTask: Task<Void, Never>?
     /// Aynı anda analiz edilen fotoğraf sayısı.
@@ -105,8 +109,10 @@ final class ScanModel {
         let targets = selectedForDeletion.intersection(ids)
         guard !targets.isEmpty else { return }
         do {
+            let bytes = totalSize(of: targets)
             try await PhotoLibrary.delete(ids: Array(targets))
             remove(targets)
+            notice = "\(targets.count) öğe silindi. \"Son Silinenler\" albümü boşaltılınca \(bytes.formatted(.byteCount(style: .file))) yer açılacak."
         } catch {
             // Kullanıcı iOS onayında "Vazgeç" derse de buraya düşer.
             errorMessage = "Silme tamamlanmadı: \(error.localizedDescription)"
@@ -119,6 +125,7 @@ final class ScanModel {
             return
         }
         wasCancelled = false
+        isLimitedAccess = PHPhotoLibrary.authorizationStatus(for: .readWrite) == .limited
 
         let library = PhotoLibrary.fetchImageAssets()
         let videos = PhotoLibrary.fetchVideoAssets()
