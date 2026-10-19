@@ -98,29 +98,31 @@ private struct StartView: View {
     @Environment(ScanModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            Image("Mascot")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 150, height: 150)
-                .clipShape(.circle)
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-                .accessibilityHidden(true)
-            VStack(spacing: 8) {
-                Text("Başak'ın Photo Sweep uygulamasına hoş geldiniz 👋")
-                    .font(.title.bold())
-                    .multilineTextAlignment(.center)
-                Text("Kopyaları, benzer kareleri ve gereksiz fotoğrafları bulur, hangisini saklayacağını önerir.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: 28) {
+                WavingMascot()
+                    .padding(.top, 24)
+                VStack(spacing: 8) {
+                    Text("Başak'ın Photo Sweep uygulamasına hoş geldiniz")
+                        .font(.title2.bold())
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Kopyaları, benzer kareleri ve gereksiz fotoğrafları bulur, hangisini saklayacağını önerir.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VStack(alignment: .leading, spacing: 16) {
+                    FeatureRow(systemImage: "lock.shield", title: "Tamamen telefonda", text: "Hiçbir fotoğraf dışarı gönderilmez.")
+                    FeatureRow(systemImage: "arrow.uturn.backward.circle", title: "Geri alınabilir", text: "Silinenler 30 gün \"Son Silinenler\"de durur.")
+                    FeatureRow(systemImage: "star.circle", title: "Favorilere dokunmaz", text: "Favoriler asla otomatik seçilmez.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            VStack(alignment: .leading, spacing: 16) {
-                FeatureRow(systemImage: "lock.shield", title: "Tamamen telefonda", text: "Hiçbir fotoğraf dışarı gönderilmez.")
-                FeatureRow(systemImage: "arrow.uturn.backward.circle", title: "Geri alınabilir", text: "Silinenler 30 gün \"Son Silinenler\"de durur.")
-                FeatureRow(systemImage: "star.circle", title: "Favorilere dokunmaz", text: "Favoriler asla otomatik seçilmez.")
-            }
-            Spacer()
+            .padding(24)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom) {
             Button {
                 model.startScan()
             } label: {
@@ -131,8 +133,37 @@ private struct StartView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(.background)
         }
-        .padding(24)
+    }
+}
+
+/// Memoji hafifçe sallanır, köşedeki el sürekli el sallar.
+private struct WavingMascot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var waving = false
+
+    var body: some View {
+        Image("Mascot")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 140, height: 140)
+            .clipShape(.circle)
+            .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+            .rotationEffect(.degrees(waving ? 3 : -3), anchor: .bottom)
+            .offset(y: waving ? -4 : 0)
+            .overlay(alignment: .bottomTrailing) {
+                Text("👋")
+                    .font(.system(size: 48))
+                    .rotationEffect(.degrees(waving ? 20 : -15), anchor: .bottomTrailing)
+                    .offset(x: 12, y: 4)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3).repeatForever(autoreverses: true), value: waving)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: waving)
+            .onAppear { waving = true }
+            .accessibilityHidden(true)
     }
 }
 
