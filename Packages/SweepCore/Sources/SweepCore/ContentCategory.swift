@@ -4,6 +4,12 @@
 public enum ContentCategory: String, CaseIterable, Sendable {
     case food
     case landscape
+    case document
+    case pet
+
+    /// Uygulamanın belge algılayıcısı, sayfa karenin büyük bölümünü
+    /// kapladığında bu etiketi ekler (güven = algılama güveni).
+    public static let documentSegmentLabel = "document_segment"
 
     public var identifiers: Set<String> {
         switch self {
@@ -20,6 +26,16 @@ public enum ContentCategory: String, CaseIterable, Sendable {
                 "river", "waterfall", "forest", "desert", "canyon", "cliff", "valley",
                 "sunset_sunrise", "field", "snow", "glacier", "volcano", "island", "coast",
             ]
+        case .document:
+            [
+                Self.documentSegmentLabel, "document", "paper", "handwriting", "receipt",
+                "printed_page", "whiteboard", "blackboard", "menu", "notebook", "book",
+            ]
+        case .pet:
+            [
+                "cat", "dog", "kitten", "puppy", "animal", "pet", "bird", "parrot", "rabbit",
+                "hamster", "guinea_pig", "horse", "fish", "turtle",
+            ]
         }
     }
 
@@ -32,10 +48,10 @@ public enum ContentCategory: String, CaseIterable, Sendable {
     public func matches(_ record: PhotoRecord) -> Bool {
         let hit = record.labels.contains { identifiers.contains($0.key) && $0.value >= Self.minimumConfidence }
         switch self {
-        case .food:
+        case .food, .pet:
             return hit
-        case .landscape:
-            // İnsan olan kareler manzara sayılmaz; anı fotoğrafı olabilir.
+        case .landscape, .document:
+            // İnsan olan kareler manzara ya da belge sayılmaz; anı fotoğrafı olabilir.
             return hit && record.quality.faceQuality == nil
         }
     }

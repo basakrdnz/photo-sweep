@@ -1,8 +1,8 @@
+import Foundation
 import Observation
 import Photos
 import SweepCore
 
-/// Tek tek listelenen (gruplanmayan) temizlik kategorileri.
 /// Sonuçları çekim tarihine göre süzmek için.
 enum DateFilter: Hashable, CaseIterable {
     case all
@@ -22,20 +22,37 @@ enum DateFilter: Hashable, CaseIterable {
     }
 }
 
-enum FlatCategory: Hashable {
+/// Tek tek listelenen (gruplanmayan) temizlik kategorileri.
+enum FlatCategory: Hashable, CaseIterable {
     case screenshots
     case blurry
-    case largeVideos
+    case documents
     case food
     case landscape
+    case pets
+    case largeVideos
 
     var title: String {
         switch self {
         case .screenshots: "Ekran görüntüleri"
         case .blurry: "Bulanık olabilir"
-        case .largeVideos: "Büyük videolar"
+        case .documents: "Belge ve sayfalar"
         case .food: "Yemek"
         case .landscape: "Manzara"
+        case .pets: "Hayvanlar"
+        case .largeVideos: "Büyük videolar"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .screenshots: "Ekran görüntülerinin çoğu bir kez bakılıp unutulur."
+        case .blurry: "Her yeri bulanık çıkmış kareler."
+        case .documents: "Kâğıt, kitap sayfası, soru, fiş ve not fotoğrafları."
+        case .food: "Yemek ve içecek fotoğrafları."
+        case .landscape: "İçinde insan olmayan doğa ve manzara kareleri."
+        case .pets: "Kedi, köpek ve diğer hayvan fotoğrafları."
+        case .largeVideos: "100 MB'tan büyük videolar, büyükten küçüğe."
         }
     }
 
@@ -43,9 +60,21 @@ enum FlatCategory: Hashable {
         switch self {
         case .screenshots: "camera.viewfinder"
         case .blurry: "aqi.low"
-        case .largeVideos: "video"
+        case .documents: "doc.text.viewfinder"
         case .food: "fork.knife"
         case .landscape: "mountain.2"
+        case .pets: "pawprint"
+        case .largeVideos: "video"
+        }
+    }
+
+    var contentCategory: ContentCategory? {
+        switch self {
+        case .documents: .document
+        case .food: .food
+        case .landscape: .landscape
+        case .pets: .pet
+        default: nil
         }
     }
 }
@@ -63,11 +92,7 @@ final class ScanModel {
 
     private(set) var phase: Phase = .idle
     private(set) var groups: [SimilarityGroup] = []
-    private(set) var screenshotIDs: [String] = []
-    private(set) var blurryIDs: [String] = []
-    private(set) var largeVideoIDs: [String] = []
-    private(set) var foodIDs: [String] = []
-    private(set) var landscapeIDs: [String] = []
+    private(set) var flatIDs: [FlatCategory: [String]] = [:]
     /// Silme sürerken arayüz kilitlenir ve ilerleme gösterilir.
     private(set) var isDeleting = false
     var dateFilter: DateFilter = .all
@@ -82,6 +107,8 @@ final class ScanModel {
     private(set) var wasCancelled = false
     /// Kullanıcı yalnızca seçtiği fotoğraflara erişim verdiyse.
     private(set) var isLimitedAccess = false
+    /// Kalan süre tahmini (saniye); yeterli örnek yokken nil.
+    private(set) var estimatedRemaining: TimeInterval?
     var selectedForDeletion: Set<String> = []
     var errorMessage: String?
     /// Silmeden sonra gösterilen bilgi.
@@ -103,6 +130,8 @@ final class ScanModel {
     func cancelScan() {
         scanTask?.cancel()
     }
+
+    // MARK: - Süzme
 
     /// Seçili tarih aralığı; nil ise süzme yok.
     private var dateRange: ClosedRange<Date>? {
@@ -142,13 +171,7 @@ final class ScanModel {
     }
 
     func ids(for category: FlatCategory) -> [String] {
-        let all: [String] = switch category {
-        case .screenshots: screenshotIDs
-        case .blurry: blurryIDs
-        case .largeVideos: largeVideoIDs
-        case .food: foodIDs
-        case .landscape: landscapeIDs
-        }
+        let all = flatIDs[category] ?? []
         let range = dateRange
         return range == nil ? all : all.filter { isVisible($0, in: range) }
     }
@@ -162,6 +185,8 @@ final class ScanModel {
     func totalSize(of ids: some Sequence<String>) -> Int64 {
         ids.reduce(0) { $0 + (sizes[$1] ?? 0) }
     }
+
+    // MARK: - Seçim
 
     func toggle(_ id: String) {
         if selectedForDeletion.contains(id) {
@@ -179,6 +204,16 @@ final class ScanModel {
         }
     }
 
+    /// Gruplarda önerilen dışındakileri seçer; favorilere dokunmaz.
+    func selectAllButBest(in groups: [SimilarityGroup]) {
+        for group in groups {
+            selectedForDeletion.remove(group.suggestedKeepID)
+            for id in group.memberIDs.dropFirst() where records[id]?.quality.isFavorite != true {
+                selectedForDeletion.insert(id)
+            }
+        }
+    }
+
     /// Verilen öğelerden seçili olanları siler.
     func deleteSelected(among ids: [String]) async {
         let targets = selectedForDeletion.intersection(ids)
@@ -191,10 +226,15 @@ final class ScanModel {
             remove(targets)
             notice = "\(targets.count) öğe silindi. \"Son Silinenler\" albümü boşaltılınca \(bytes.formatted(.byteCount(style: .file))) yer açılacak."
         } catch {
-            // Kullanıcı iOS onayında "Vazgeç" derse de buraya düşer.
-            errorMessage = "Silme tamamlanmadı: \(error.localizedDescription)"
+            // Kullanıcı iOS onayında "Vazgeç" derse de buraya düşer; bu bir hata değil.
+            let code = (error as NSError).code
+            if code != PHPhotosError.Code.userCancelled.rawValue && code != NSUserCancelledError {
+                errorMessage = "Silme tamamlanmadı: \(error.localizedDescription)"
+            }
         }
     }
+
+    // MARK: - Tarama
 
     private func scan() async {
         guard await PhotoLibrary.requestAccess() else {
@@ -202,6 +242,7 @@ final class ScanModel {
             return
         }
         wasCancelled = false
+        estimatedRemaining = nil
         isLimitedAccess = PHPhotoLibrary.authorizationStatus(for: .readWrite) == .limited
 
         let library = PhotoLibrary.fetchImageAssets()
@@ -225,6 +266,8 @@ final class ScanModel {
         }
         phase = .scanning(done: analyses.count, total: library.count)
 
+        let started = Date.now
+        var processed = 0
         var skipped = 0
         await withTaskGroup(of: (String, CachedAnalysis?).self) { group in
             var next = 0
@@ -240,6 +283,11 @@ final class ScanModel {
                     analyses[id] = entry
                 } else {
                     skipped += 1
+                }
+                processed += 1
+                if processed >= 20 {
+                    let perItem = Date.now.timeIntervalSince(started) / Double(processed)
+                    estimatedRemaining = perItem * Double(pending.count - processed)
                 }
                 if case let .scanning(done, total) = phase {
                     phase = .scanning(done: done + 1, total: total)
@@ -264,19 +312,24 @@ final class ScanModel {
             .filter { $0.mediaSubtypes.contains(.photoScreenshot) }
             .map(\.localIdentifier)
         let screenshotSet = Set(screenshots)
+        let photos = analyzed.reversed().filter { !screenshotSet.contains($0.id) }
         // Gruplama büyük arşivde bir saniyeyi bulabilir; arayüzü kilitlemesin.
         groups = await Task.detached(priority: .userInitiated) { Grouper.group(analyzed) }.value
-        screenshotIDs = screenshots.reversed()
-        blurryIDs = analyzed
-            .filter { !screenshotSet.contains($0.id) && BlurCheck.isLikelyBlurry($0) }
-            .sorted { ($0.quality.sharpness ?? 0) < ($1.quality.sharpness ?? 0) }
+
+        var flat: [FlatCategory: [String]] = [:]
+        flat[.screenshots] = screenshots.reversed()
+        flat[.blurry] = photos
+            .filter { BlurCheck.isLikelyBlurry($0) }
+            .sorted { ($0.quality.focus ?? $0.quality.sharpness ?? 0) < ($1.quality.focus ?? $1.quality.sharpness ?? 0) }
             .map(\.id)
-        foodIDs = analyzed.reversed().filter { ContentCategory.food.matches($0) }.map(\.id)
-        landscapeIDs = analyzed.reversed().filter { ContentCategory.landscape.matches($0) }.map(\.id)
+        for category in FlatCategory.allCases {
+            if let content = category.contentCategory {
+                flat[category] = photos.filter { content.matches($0) }.map(\.id)
+            }
+        }
         selectedForDeletion = defaultSelection(for: groups)
 
-        let candidates = Set(groups.flatMap(\.memberIDs))
-            .union(screenshotIDs).union(blurryIDs).union(foodIDs).union(landscapeIDs)
+        let candidates = flat.values.reduce(into: Set(groups.flatMap(\.memberIDs))) { $0.formUnion($1) }
         let sizeTargets = candidates.compactMap { assets[$0] } + videos
         sizes = await Task.detached(priority: .userInitiated) {
             Dictionary(
@@ -284,10 +337,11 @@ final class ScanModel {
                 uniquingKeysWith: { first, _ in first }
             )
         }.value
-        largeVideoIDs = videos
+        flat[.largeVideos] = videos
             .map(\.localIdentifier)
             .filter { (sizes[$0] ?? 0) >= largeVideoBytes }
             .sorted { (sizes[$0] ?? 0) > (sizes[$1] ?? 0) }
+        flatIDs = flat
         phase = .finished
     }
 
@@ -298,11 +352,9 @@ final class ScanModel {
             guard remaining.count > 1 else { return nil }
             return SimilarityGroup(kind: group.kind, memberIDs: remaining)
         }
-        screenshotIDs.removeAll(where: removed.contains)
-        blurryIDs.removeAll(where: removed.contains)
-        largeVideoIDs.removeAll(where: removed.contains)
-        foodIDs.removeAll(where: removed.contains)
-        landscapeIDs.removeAll(where: removed.contains)
+        for category in flatIDs.keys {
+            flatIDs[category]?.removeAll(where: removed.contains)
+        }
     }
 
     /// Önerilen dışındakiler seçili gelir; favoriler asla otomatik seçilmez.

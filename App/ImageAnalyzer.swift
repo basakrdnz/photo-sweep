@@ -29,12 +29,27 @@ enum ImageAnalyzer {
         let featureRequest = VNGenerateImageFeaturePrintRequest()
         let faceRequest = VNDetectFaceCaptureQualityRequest()
         let classifyRequest = VNClassifyImageRequest()
+        let documentRequest = VNDetectDocumentSegmentationRequest()
+        let animalRequest = VNRecognizeAnimalsRequest()
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         do {
-            try handler.perform([featureRequest, faceRequest, classifyRequest])
+            try handler.perform([featureRequest, faceRequest, classifyRequest, documentRequest, animalRequest])
             for observation in classifyRequest.results ?? []
             where observation.confidence >= 0.3 && ContentCategory.allIdentifiers.contains(observation.identifier) {
                 result.labels[observation.identifier] = observation.confidence
+            }
+            // Kâğıt, kitap sayfası, soru: sayfa karenin en az üçte birini kaplamalı.
+            if let page = documentRequest.results?.first {
+                let box = page.boundingBox
+                if box.width * box.height >= 0.33 {
+                    result.labels[ContentCategory.documentSegmentLabel] = page.confidence
+                }
+            }
+            for animal in animalRequest.results ?? [] {
+                for label in animal.labels {
+                    let key = label.identifier.lowercased()
+                    result.labels[key] = max(result.labels[key] ?? 0, label.confidence)
+                }
             }
             if let observation = featureRequest.results?.first {
                 result.features = featureVector(from: observation)

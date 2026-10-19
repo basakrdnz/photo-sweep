@@ -164,6 +164,17 @@ private func record(
         #expect(!ContentCategory.food.matches(maybe))
     }
 
+    @Test func documentsAndPets() {
+        let page = PhotoRecord(id: "d", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
+                               differenceHash: nil, features: nil,
+                               labels: [ContentCategory.documentSegmentLabel: 0.95])
+        let cat = PhotoRecord(id: "c", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
+                              differenceHash: nil, features: nil, labels: ["cat": 0.9])
+        #expect(ContentCategory.document.matches(page))
+        #expect(!ContentCategory.pet.matches(page))
+        #expect(ContentCategory.pet.matches(cat))
+    }
+
     @Test func landscapeWithPeopleIsNotLandscape() {
         let selfie = PhotoRecord(id: "s", creationDate: nil, pixelWidth: 1, pixelHeight: 1,
                                  differenceHash: nil, features: nil,

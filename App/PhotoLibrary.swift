@@ -65,7 +65,11 @@ enum PhotoLibrary {
     }
 
     /// Ekranda gösterilecek önizleme; gerekirse iCloud'dan indirir.
-    static func thumbnail(for asset: PHAsset, side: CGFloat) async -> UIImage? {
+    static func thumbnail(
+        for asset: PHAsset,
+        side: CGFloat,
+        contentMode: PHImageContentMode = .aspectFill
+    ) async -> UIImage? {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .fast
@@ -74,7 +78,7 @@ enum PhotoLibrary {
             PHImageManager.default().requestImage(
                 for: asset,
                 targetSize: CGSize(width: side, height: side),
-                contentMode: .aspectFill,
+                contentMode: contentMode,
                 options: options
             ) { image, _ in
                 continuation.resume(returning: image)

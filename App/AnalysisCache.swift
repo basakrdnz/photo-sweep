@@ -42,7 +42,7 @@ struct CachedAnalysis: Codable, Sendable {
 /// Analiz sonuçlarını Application Support altında tek dosyada tutar.
 enum AnalysisCache {
     /// Analiz yöntemi değişirse artırılır; eski önbellek yok sayılır.
-    private static let version = 2
+    private static let version = 3
 
     private struct Payload: Codable {
         var version: Int
