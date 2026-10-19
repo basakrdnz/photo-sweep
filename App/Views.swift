@@ -133,13 +133,6 @@ private struct StartView: View {
             .controlSize(.large)
         }
         .padding(24)
-        .task {
-            // İzin daha önce verildiyse beklemeden tara; önbellek sayesinde hızlı.
-            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-            if status == .authorized || status == .limited {
-                model.startScan()
-            }
-        }
     }
 }
 
