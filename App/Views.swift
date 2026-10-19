@@ -1,3 +1,4 @@
+import AVFoundation
 import Photos
 import SwiftUI
 import SweepCore
@@ -140,30 +141,53 @@ private struct StartView: View {
     }
 }
 
-/// Memoji hafifçe sallanır, köşedeki el sürekli el sallar.
+/// Başak'ın el sallayan Memoji videosu; sessiz ve sonsuz döngüde oynar.
+/// "Hareketi Azalt" açıksa yerine durağan Memoji gösterilir.
 private struct WavingMascot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var waving = false
 
     var body: some View {
-        Image("Mascot")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 140, height: 140)
-            .clipShape(.circle)
-            .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-            .rotationEffect(.degrees(waving ? 3 : -3), anchor: .bottom)
-            .offset(y: waving ? -4 : 0)
-            .overlay(alignment: .bottomTrailing) {
-                Text("👋")
-                    .font(.system(size: 48))
-                    .rotationEffect(.degrees(waving ? 20 : -15), anchor: .bottomTrailing)
-                    .offset(x: 12, y: 4)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3).repeatForever(autoreverses: true), value: waving)
+        Group {
+            if !reduceMotion, let url = Bundle.main.url(forResource: "MascotWave", withExtension: "mp4") {
+                LoopingVideo(url: url)
+                    .background(.white)
+                    .clipShape(.rect(cornerRadius: 36))
+            } else {
+                Image("Mascot")
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(.circle)
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: waving)
-            .onAppear { waving = true }
-            .accessibilityHidden(true)
+        }
+        .frame(width: 190, height: 190)
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct LoopingVideo: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PlayerView {
+        let view = PlayerView()
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer()
+        player.isMuted = true
+        // Arka planda çalan müziği kesmesin.
+        player.preventsDisplaySleepDuringVideoPlayback = false
+        view.looper = AVPlayerLooper(player: player, templateItem: item)
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        player.play()
+        return view
+    }
+
+    func updateUIView(_ uiView: PlayerView, context: Context) {}
+
+    final class PlayerView: UIView {
+        var looper: AVPlayerLooper?
+        override static var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
     }
 }
 
