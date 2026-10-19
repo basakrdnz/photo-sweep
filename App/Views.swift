@@ -102,7 +102,7 @@ private struct StartView: View {
         ScrollView {
             VStack(spacing: 28) {
                 WavingMascot()
-                    .padding(.top, 24)
+                    .padding(.top, 8)
                 VStack(spacing: 8) {
                     Text("Başak'ın Photo Sweep uygulamasına hoş geldiniz")
                         .font(.title2.bold())
@@ -136,8 +136,11 @@ private struct StartView: View {
             .controlSize(.large)
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            .background(.background)
+            .background(.white)
         }
+        // Memoji videosunun beyaz zeminiyle birleşsin diye bu ekran her zaman açık renkte.
+        .background(.white)
+        .environment(\.colorScheme, .light)
     }
 }
 
@@ -149,18 +152,17 @@ private struct WavingMascot: View {
     var body: some View {
         Group {
             if !reduceMotion, let url = Bundle.main.url(forResource: "MascotWave", withExtension: "mp4") {
+                // Videonun arka planı da beyaz; çerçevesiz durunca el sayfaya taşıyor gibi görünür.
                 LoopingVideo(url: url)
-                    .background(.white)
-                    .clipShape(.rect(cornerRadius: 36))
+                    .frame(width: 240, height: 240)
             } else {
                 Image("Mascot")
                     .resizable()
                     .scaledToFit()
                     .clipShape(.circle)
+                    .frame(width: 190, height: 190)
             }
         }
-        .frame(width: 190, height: 190)
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
         .accessibilityHidden(true)
     }
 }
@@ -179,6 +181,7 @@ private struct LoopingVideo: UIViewRepresentable {
         view.looper = AVPlayerLooper(player: player, templateItem: item)
         view.playerLayer.player = player
         view.playerLayer.videoGravity = .resizeAspect
+        view.backgroundColor = .white
         player.play()
         return view
     }
