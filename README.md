@@ -1,6 +1,6 @@
 # Photo Sweep
 
-iPhone'daki fotoğraf arşivini tarayıp kopya ve benzer fotoğrafları gruplayan, her grupta hangisinin saklanacağını öneren ve seçtiklerinizi silmenize yardım eden uygulama. Ekran görüntülerini, bulanık fotoğrafları, belge/sayfa, yemek, manzara ve hayvan fotoğraflarını ve büyük videoları da listeler; her kategoride açılacak alanı gösterir. Sonuçlar tarih aralığına göre süzülebilir.
+iPhone'daki fotoğraf arşivini tarayıp kopya ve benzer fotoğrafları gruplayan, her grupta hangisinin saklanacağını öneren ve seçtiklerinizi silmenize yardım eden uygulama. Ekran görüntülerini, bulanık fotoğrafları, belge/sayfa, yemek, manzara ve hayvan fotoğraflarını ve büyük videoları da listeler; her kategoride açılacak alanı gösterir. Sonuçlar tarih aralığına göre süzülebilir. "Hızlı gözden geçir" ile galeri ay ay kaydırılarak ayıklanır (sola sil, sağa sakla). Selfie, ekran kaydı ve 3 saniyeden kısa video kategorileri de vardır.
 
 Arkadaşlara dağıtım: [DAGITIM.md](DAGITIM.md).
 

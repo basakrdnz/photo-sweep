@@ -31,6 +31,9 @@ enum FlatCategory: Hashable, CaseIterable {
     case food
     case landscape
     case pets
+    case selfies
+    case screenRecordings
+    case shortVideos
     case largeVideos
 
     var title: String {
@@ -41,6 +44,9 @@ enum FlatCategory: Hashable, CaseIterable {
         case .food: "Yemek"
         case .landscape: "Manzara"
         case .pets: "Hayvanlar"
+        case .selfies: "Selfie'ler"
+        case .screenRecordings: "Ekran kayıtları"
+        case .shortVideos: "Kısa videolar"
         case .largeVideos: "Büyük videolar"
         }
     }
@@ -53,6 +59,9 @@ enum FlatCategory: Hashable, CaseIterable {
         case .food: "Yemek ve içecek fotoğrafları."
         case .landscape: "İçinde insan olmayan doğa ve manzara kareleri."
         case .pets: "Kedi, köpek ve diğer hayvan fotoğrafları."
+        case .selfies: "Ön kamerayla çekilmiş fotoğraflar."
+        case .screenRecordings: "Ekran kayıtları, büyükten küçüğe."
+        case .shortVideos: "3 saniyeden kısa, çoğu yanlışlıkla çekilmiş videolar."
         case .largeVideos: "100 MB'tan büyük videolar, büyükten küçüğe."
         }
     }
@@ -65,6 +74,9 @@ enum FlatCategory: Hashable, CaseIterable {
         case .food: "fork.knife"
         case .landscape: "mountain.2"
         case .pets: "pawprint"
+        case .selfies: "person.crop.square"
+        case .screenRecordings: "record.circle"
+        case .shortVideos: "timer"
         case .largeVideos: "video"
         }
     }
@@ -78,6 +90,16 @@ enum FlatCategory: Hashable, CaseIterable {
         default: nil
         }
     }
+}
+
+/// Hızlı gözden geçirmede bir ay.
+struct ReviewMonth: Identifiable {
+    let start: Date
+    /// Eskiden yeniye.
+    let ids: [String]
+
+    var id: Date { start }
+    var title: String { start.formatted(.dateTime.month(.wide).year()) }
 }
 
 @MainActor
@@ -94,6 +116,10 @@ final class ScanModel {
     private(set) var phase: Phase = .idle
     private(set) var groups: [SimilarityGroup] = []
     private(set) var flatIDs: [FlatCategory: [String]] = [:]
+    /// Hızlı gözden geçirme için aylar, yeniden eskiye.
+    private(set) var reviewMonths: [ReviewMonth] = []
+    /// Hızlı gözden geçirmede "sakla" denenler; bir daha gösterilmez.
+    private(set) var keptInReview: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "keptInReview") ?? [])
     /// Silme sürerken arayüz kilitlenir ve ilerleme gösterilir.
     private(set) var isDeleting = false
     var dateFilter: DateFilter = .all
@@ -121,9 +147,10 @@ final class ScanModel {
     /// Bu boyutun üstündeki videolar "büyük" sayılır.
     private let largeVideoBytes: Int64 = 100_000_000
 
-    func startScan() {
+    /// - Parameter fromScratch: true ise önbellek yok sayılır, her şey yeniden analiz edilir.
+    func startScan(fromScratch: Bool = false) {
         scanTask?.cancel()
-        scanTask = Task { await scan() }
+        scanTask = Task { await scan(fromScratch: fromScratch) }
     }
 
     /// Taramayı durdurur; o ana kadar analiz edilenlerle sonuç gösterilir
@@ -243,9 +270,43 @@ final class ScanModel {
         }
     }
 
+    // MARK: - Hızlı gözden geçirme
+
+    func markKept(_ id: String, _ kept: Bool) {
+        if kept {
+            keptInReview.insert(id)
+        } else {
+            keptInReview.remove(id)
+        }
+    }
+
+    func saveKept() {
+        UserDefaults.standard.set(Array(keptInReview), forKey: "keptInReview")
+    }
+
+    func forgetKept() {
+        keptInReview.removeAll()
+        saveKept()
+    }
+
+    private nonisolated static func months(of assets: [PHAsset]) -> [ReviewMonth] {
+        let calendar = Calendar.current
+        var byMonth: [Date: [(String, Date)]] = [:]
+        for asset in assets {
+            guard let date = asset.creationDate,
+                  let month = calendar.dateInterval(of: .month, for: date)?.start else { continue }
+            byMonth[month, default: []].append((asset.localIdentifier, date))
+        }
+        return byMonth
+            .map { month, items in
+                ReviewMonth(start: month, ids: items.sorted { $0.1 < $1.1 }.map(\.0))
+            }
+            .sorted { $0.start > $1.start }
+    }
+
     // MARK: - Tarama
 
-    private func scan() async {
+    private func scan(fromScratch: Bool) async {
         guard await PhotoLibrary.requestAccess() else {
             phase = .denied
             return
@@ -263,7 +324,9 @@ final class ScanModel {
         phase = .scanning(done: 0, total: library.count)
 
         // Değişmemiş fotoğraflar önbellekten gelir; yalnızca yeniler analiz edilir.
-        let cache = await Task.detached(priority: .userInitiated) { AnalysisCache.load() }.value
+        let cache = fromScratch
+            ? [:]
+            : await Task.detached(priority: .userInitiated) { AnalysisCache.load() }.value
         var analyses: [String: CachedAnalysis] = [:]
         var pending: [PHAsset] = []
         for asset in library {
@@ -348,7 +411,10 @@ final class ScanModel {
         }
         selectedForDeletion = defaultSelection(for: groups)
 
-        let candidates = flat.values.reduce(into: Set(groups.flatMap(\.memberIDs))) { $0.formUnion($1) }
+        let selfieSet = PhotoLibrary.selfieIDs()
+        let candidates = flat.values
+            .reduce(into: Set(groups.flatMap(\.memberIDs))) { $0.formUnion($1) }
+            .union(selfieSet)
         let sizeTargets = candidates.compactMap { assets[$0] } + videos
         sizes = await Task.detached(priority: .userInitiated) {
             Dictionary(
@@ -356,6 +422,16 @@ final class ScanModel {
                 uniquingKeysWith: { first, _ in first }
             )
         }.value
+        flat[.selfies] = library.reversed().map(\.localIdentifier).filter(selfieSet.contains)
+        let recordings = videos.filter { $0.mediaSubtypes.contains(.videoScreenRecording) }
+        flat[.screenRecordings] = recordings
+            .map(\.localIdentifier)
+            .sorted { (sizes[$0] ?? 0) > (sizes[$1] ?? 0) }
+        flat[.shortVideos] = videos
+            .filter { $0.duration < 3 && !$0.mediaSubtypes.contains(.videoScreenRecording) }
+            .sorted { ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast) }
+            .map(\.localIdentifier)
+        reviewMonths = Self.months(of: library + videos)
         flat[.largeVideos] = videos
             .map(\.localIdentifier)
             .filter { (sizes[$0] ?? 0) >= largeVideoBytes }

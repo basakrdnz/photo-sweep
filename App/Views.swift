@@ -281,6 +281,9 @@ private extension FlatCategory {
         case .food: .orange
         case .landscape: .green
         case .pets: .pink
+        case .selfies: .cyan
+        case .screenRecordings: .mint
+        case .shortVideos: .yellow
         case .largeVideos: .red
         }
     }
@@ -294,6 +297,32 @@ private struct SummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 SavingsCard()
+
+                NavigationLink {
+                    ReviewMonthsView()
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "hand.draw.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(Color.orange.gradient, in: .rect(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hızlı gözden geçir")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Ay ay kaydır: sola sil, sağa sakla.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .background(.background, in: .rect(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
 
                 DateFilterBar()
 
@@ -363,10 +392,19 @@ private struct SummaryView: View {
         .navigationTitle("Photo Sweep")
         .refreshable { model.startScan() }
         .toolbar {
-            Button {
-                model.startScan()
+            Menu {
+                Button {
+                    model.startScan()
+                } label: {
+                    Label("Yeni fotoğrafları tara", systemImage: "arrow.clockwise")
+                }
+                Button(role: .destructive) {
+                    model.startScan(fromScratch: true)
+                } label: {
+                    Label("Baştan tara (her şeyi yeniden incele)", systemImage: "arrow.counterclockwise")
+                }
             } label: {
-                Label("Yeniden tara", systemImage: "arrow.clockwise")
+                Label("Tara", systemImage: "arrow.clockwise")
             }
         }
     }
@@ -947,5 +985,262 @@ private struct LargePhoto: View {
                 image = await PhotoLibrary.thumbnail(for: asset, side: side, contentMode: .aspectFit)
             }
         }
+    }
+}
+
+// MARK: - Hızlı gözden geçirme
+
+private struct ReviewMonthsView: View {
+    @Environment(ScanModel.self) private var model
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(model.reviewMonths) { month in
+                    let pending = month.ids.filter { !model.keptInReview.contains($0) && model.assets[$0] != nil }
+                    NavigationLink {
+                        SwipeReviewView(title: month.title, ids: pending)
+                    } label: {
+                        HStack {
+                            Text(month.title)
+                            Spacer()
+                            Text(pending.isEmpty ? "Bitti" : "\(pending.count)")
+                                .foregroundStyle(pending.isEmpty ? .green : .secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                    .disabled(pending.isEmpty)
+                }
+            } footer: {
+                Text("Sola kaydırdıkların silinmek üzere işaretlenir, sağa kaydırdıkların bir daha karşına çıkmaz. Bitirince işaretlediklerini tek seferde silersin.")
+            }
+            if !model.keptInReview.isEmpty {
+                Section {
+                    Button("Saklananları yeniden göster", role: .destructive) {
+                        model.forgetKept()
+                    }
+                }
+            }
+        }
+        .navigationTitle("Hızlı gözden geçir")
+    }
+}
+
+private struct SwipeReviewView: View {
+    @Environment(ScanModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let ids: [String]
+
+    @State private var index = 0
+    @State private var decisions: [(id: String, delete: Bool)] = []
+    @State private var drag: CGSize = .zero
+    @State private var isAnimating = false
+
+    private var marked: [String] { decisions.filter { $0.delete }.map { $0.id } }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            if index < ids.count {
+                card
+                info
+                controls
+            } else {
+                finished
+            }
+        }
+        .padding()
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if index < ids.count && !decisions.isEmpty {
+                Button("Bitir") { index = ids.count }
+            }
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: index)
+        .onDisappear { model.saveKept() }
+    }
+
+    private var card: some View {
+        ZStack {
+            if index + 1 < ids.count {
+                ReviewCard(asset: model.assets[ids[index + 1]])
+                    .id(ids[index + 1])
+                    .scaleEffect(0.94)
+                    .opacity(0.5)
+            }
+            ReviewCard(asset: model.assets[ids[index]])
+                .id(ids[index])
+                .overlay(alignment: .topLeading) {
+                    Stamp(text: "SAKLA", color: .green)
+                        .opacity(Double(max(0, drag.width)) / 100)
+                }
+                .overlay(alignment: .topTrailing) {
+                    Stamp(text: "SİL", color: .red)
+                        .opacity(Double(max(0, -drag.width)) / 100)
+                }
+                .offset(x: drag.width, y: drag.height * 0.2)
+                .rotationEffect(.degrees(Double(drag.width) / 25))
+                .gesture(
+                    DragGesture()
+                        .onChanged { drag = $0.translation }
+                        .onEnded { value in
+                            if value.translation.width < -100 {
+                                decide(delete: true)
+                            } else if value.translation.width > 100 {
+                                decide(delete: false)
+                            } else {
+                                withAnimation(.spring) { drag = .zero }
+                            }
+                        }
+                )
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private var info: some View {
+        let id = ids[index]
+        return HStack {
+            if let date = model.assets[id]?.creationDate {
+                Text(date.formatted(date: .abbreviated, time: .shortened))
+            }
+            if model.assets[id]?.isFavorite == true {
+                Image(systemName: "heart.fill").foregroundStyle(.pink)
+            }
+            Spacer()
+            Text("\(index + 1) / \(ids.count)")
+                .monospacedDigit()
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 28) {
+            RoundButton(systemImage: "arrow.uturn.backward", color: .gray, size: 52) { undo() }
+                .disabled(decisions.isEmpty)
+                .accessibilityLabel("Geri al")
+            RoundButton(systemImage: "xmark", color: .red, size: 72) { decide(delete: true) }
+                .accessibilityLabel("Sil")
+            RoundButton(systemImage: "checkmark", color: .green, size: 72) { decide(delete: false) }
+                .accessibilityLabel("Sakla")
+        }
+    }
+
+    private var finished: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: marked.isEmpty ? "checkmark.circle.fill" : "trash.circle.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(marked.isEmpty ? .green : .red)
+            Text(marked.isEmpty ? "Hepsini sakladın" : "\(marked.count) öğe silinmek üzere işaretlendi")
+                .font(.title3.bold())
+                .multilineTextAlignment(.center)
+            if !marked.isEmpty {
+                Text("Silinenler 30 gün \"Son Silinenler\"de durur.")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !marked.isEmpty {
+                Button(role: .destructive) {
+                    Task {
+                        await model.deleteSelected(among: marked)
+                        dismiss()
+                    }
+                } label: {
+                    Text("\(marked.count) öğeyi sil")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.large)
+            }
+            Button(marked.isEmpty ? "Kapat" : "Silmeden çık (işaretliler seçili kalır)") { dismiss() }
+            if !decisions.isEmpty {
+                Button("Geri dön, son karara") { undo() }
+                    .font(.footnote)
+            }
+        }
+    }
+
+    private func decide(delete: Bool) {
+        guard index < ids.count, !isAnimating else { return }
+        isAnimating = true
+        let id = ids[index]
+        decisions.append((id, delete))
+        model.setSelected([id], delete)
+        model.markKept(id, !delete)
+        withAnimation(.easeOut(duration: 0.18)) {
+            drag = CGSize(width: delete ? -700 : 700, height: 0)
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(180))
+            index += 1
+            drag = .zero
+            isAnimating = false
+        }
+    }
+
+    private func undo() {
+        guard let last = decisions.popLast() else { return }
+        model.setSelected([last.id], false)
+        model.markKept(last.id, false)
+        index = max(0, index - 1)
+        drag = .zero
+    }
+}
+
+private struct ReviewCard: View {
+    let asset: PHAsset?
+
+    var body: some View {
+        LargePhoto(asset: asset)
+            .background(Color.black)
+            .clipShape(.rect(cornerRadius: 20))
+            .overlay(alignment: .bottomLeading) {
+                if let asset, asset.mediaType == .video {
+                    VideoBadge(duration: asset.duration)
+                        .padding(8)
+                }
+            }
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+    }
+}
+
+private struct Stamp: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.title.weight(.heavy))
+            .foregroundStyle(color)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(color, lineWidth: 4))
+            .rotationEffect(.degrees(text == "SİL" ? 12 : -12))
+            .padding(24)
+    }
+}
+
+private struct RoundButton: View {
+    let systemImage: String
+    let color: Color
+    let size: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: size * 0.38, weight: .bold))
+                .foregroundStyle(color)
+                .frame(width: size, height: size)
+                .background(.background, in: .circle)
+                .overlay(Circle().stroke(color.opacity(0.3), lineWidth: 2))
+                .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
     }
 }

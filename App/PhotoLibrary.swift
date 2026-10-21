@@ -29,6 +29,17 @@ enum PhotoLibrary {
         return assets
     }
 
+    /// Sistemin "Selfie'ler" akıllı albümündeki öğelerin kimlikleri.
+    static func selfieIDs() -> Set<String> {
+        var ids = Set<String>()
+        PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .smartAlbumSelfPortraits, options: nil)
+            .enumerateObjects { collection, _, _ in
+                PHAsset.fetchAssets(in: collection, options: nil)
+                    .enumerateObjects { asset, _, _ in ids.insert(asset.localIdentifier) }
+            }
+        return ids
+    }
+
     /// Telefonda kapladığı alan (düzenlenmiş sürümler dahil tüm kaynaklar).
     /// iCloud'da optimize edilmiş öğelerde tam boyut döner.
     static func fileSize(of asset: PHAsset) -> Int64 {
