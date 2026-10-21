@@ -221,10 +221,18 @@ final class ScanModel {
         isDeleting = true
         defer { isDeleting = false }
         do {
-            let bytes = totalSize(of: targets)
-            try await PhotoLibrary.delete(ids: Array(targets))
-            remove(targets)
-            notice = "\(targets.count) öğe silindi. \"Son Silinenler\" albümü boşaltılınca \(bytes.formatted(.byteCount(style: .file))) yer açılacak."
+            let deleted = try await PhotoLibrary.delete(ids: Array(targets))
+            let bytes = totalSize(of: deleted)
+            remove(deleted)
+            var message = "\(deleted.count) öğe silindi ve \"Son Silinenler\" albümüne taşındı. Albüm boşaltılınca \(bytes.formatted(.byteCount(style: .file))) yer açılacak."
+            if ids.contains(where: { id in groups.contains { $0.memberIDs.contains(id) } }) {
+                message += " Kopya ve benzer gruplarında her grubun en iyi fotoğrafı galeride kalır."
+            }
+            let failed = targets.count - deleted.count
+            if failed > 0 {
+                message += " \(failed) öğe silinemedi; hâlâ seçili duruyor."
+            }
+            notice = message
         } catch {
             // Kullanıcı iOS onayında "Vazgeç" derse de buraya düşer; bu bir hata değil.
             let code = (error as NSError).code

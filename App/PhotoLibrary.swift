@@ -88,10 +88,16 @@ enum PhotoLibrary {
 
     /// Seçilenleri siler. iOS her seferinde kendi onayını sorar; silinenler
     /// 30 gün boyunca "Son Silinenler" albümünde durur.
-    static func delete(ids: [String]) async throws {
+    /// Silmeden sonra kütüphaneye yeniden bakar; gerçekten silinenlerin
+    /// kimliklerini döner. iOS bir öğeyi sessizce bırakırsa sonuçta yer almaz.
+    static func delete(ids: [String]) async throws -> Set<String> {
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetChangeRequest.deleteAssets(assets)
         }
+        var remaining = Set<String>()
+        PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
+            .enumerateObjects { asset, _, _ in remaining.insert(asset.localIdentifier) }
+        return Set(ids).subtracting(remaining)
     }
 }
