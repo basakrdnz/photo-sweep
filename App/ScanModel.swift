@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Photos
 import SweepCore
+import UIKit
 
 /// Sonuçları çekim tarihine göre süzmek için.
 enum DateFilter: Hashable, CaseIterable {
@@ -266,13 +267,20 @@ final class ScanModel {
         var analyses: [String: CachedAnalysis] = [:]
         var pending: [PHAsset] = []
         for asset in library {
-            if let entry = cache[asset.localIdentifier], entry.modified == asset.modificationDate {
+            // Düzenlenmemiş fotoğrafın içeriği değişmez; iCloud eşitlemesi gibi
+            // nedenlerle değişen tarih yeniden analiz gerektirmez.
+            if let entry = cache[asset.localIdentifier],
+               !asset.hasAdjustments || entry.modified == asset.modificationDate {
                 analyses[asset.localIdentifier] = entry
             } else {
                 pending.append(asset)
             }
         }
         phase = .scanning(done: analyses.count, total: library.count)
+
+        // Tarama sürerken ekran kilitlenmesin; kilitlenirse iOS uygulamayı durdurur.
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer { UIApplication.shared.isIdleTimerDisabled = false }
 
         let started = Date.now
         var processed = 0
@@ -293,6 +301,10 @@ final class ScanModel {
                     skipped += 1
                 }
                 processed += 1
+                // Ara kayıt: uygulama kapanırsa sonraki tarama buradan devam eder.
+                if processed % 300 == 0 {
+                    saveCache(analyses)
+                }
                 if processed >= 20 {
                     let perItem = Date.now.timeIntervalSince(started) / Double(processed)
                     estimatedRemaining = perItem * Double(pending.count - processed)
@@ -308,8 +320,7 @@ final class ScanModel {
         phase = .organizing
 
         // Silinmiş fotoğrafların kayıtları da böylece önbellekten düşer.
-        let toSave = analyses
-        Task.detached(priority: .utility) { AnalysisCache.save(toSave) }
+        saveCache(analyses)
 
         let analyzed = library.compactMap { asset in
             analyses[asset.localIdentifier].map { Self.record(for: asset, analysis: $0) }
@@ -351,6 +362,17 @@ final class ScanModel {
             .sorted { (sizes[$0] ?? 0) > (sizes[$1] ?? 0) }
         flatIDs = flat
         phase = .finished
+    }
+
+    /// Kayıtlar sırayla yazılır; bir önceki yazım sürerken yenisi sıraya girer.
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    private func saveCache(_ entries: [String: CachedAnalysis]) {
+        let previous = saveTask
+        saveTask = Task.detached(priority: .utility) {
+            await previous?.value
+            AnalysisCache.save(entries)
+        }
     }
 
     private func remove(_ removed: Set<String>) {
