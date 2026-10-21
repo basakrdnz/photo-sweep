@@ -143,7 +143,9 @@ final class ScanModel {
 
     private var scanTask: Task<Void, Never>?
     /// Aynı anda analiz edilen fotoğraf sayısı.
-    private let concurrency = 4
+    /// Yeni iPhone'larda 6 çekirdek var; analiz çoğunlukla Neural Engine'de
+    /// olsa da önizleme yükleme ve gri dönüşüm çekirdeklere yayılır.
+    private let concurrency = min(8, max(4, ProcessInfo.processInfo.activeProcessorCount))
     /// Bu boyutun üstündeki videolar "büyük" sayılır.
     private let largeVideoBytes: Int64 = 100_000_000
 

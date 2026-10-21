@@ -17,6 +17,10 @@ enum ImageAnalyzer {
         var aesthetics: Double?
     }
 
+    /// Sınıflandırıcının belge olasılığına işaret eden etiketleri.
+    private static let documentHints = ContentCategory.document.identifiers
+        .union(["text", "screenshot", "poster", "sign", "chart", "diagram", "calendar"])
+
     static func analyze(_ image: CGImage) async -> Result {
         var result = Result()
         if let gray = grayImage(from: image) {
@@ -29,15 +33,27 @@ enum ImageAnalyzer {
         let featureRequest = VNGenerateImageFeaturePrintRequest()
         let faceRequest = VNDetectFaceCaptureQualityRequest()
         let classifyRequest = VNClassifyImageRequest()
-        let documentRequest = VNDetectDocumentSegmentationRequest()
-        let animalRequest = VNRecognizeAnimalsRequest()
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         do {
-            try handler.perform([featureRequest, faceRequest, classifyRequest, documentRequest, animalRequest])
-            for observation in classifyRequest.results ?? []
+            try handler.perform([featureRequest, faceRequest, classifyRequest])
+            let classes = classifyRequest.results ?? []
+            for observation in classes
             where observation.confidence >= 0.3 && ContentCategory.allIdentifiers.contains(observation.identifier) {
                 result.labels[observation.identifier] = observation.confidence
             }
+
+            // Belge ve hayvan algılayıcıları pahalı; yalnızca sınıflandırıcı
+            // en ufak bir ihtimal gördüğünde çalışır.
+            func hints(_ identifiers: Set<String>) -> Bool {
+                classes.contains { $0.confidence >= 0.05 && identifiers.contains($0.identifier) }
+            }
+            var extra: [VNRequest] = []
+            let documentRequest = VNDetectDocumentSegmentationRequest()
+            if hints(documentHints) { extra.append(documentRequest) }
+            let animalRequest = VNRecognizeAnimalsRequest()
+            if hints(ContentCategory.pet.identifiers) { extra.append(animalRequest) }
+            if !extra.isEmpty { try handler.perform(extra) }
+
             // Kâğıt, kitap sayfası, soru: sayfa karenin en az üçte birini kaplamalı.
             if let page = documentRequest.results?.first {
                 let box = page.boundingBox
@@ -59,12 +75,7 @@ enum ImageAnalyzer {
         } catch {
             // Analiz edilemeyen fotoğraf yalnızca dHash ile karşılaştırılır.
         }
-
-        if #available(iOS 18.0, *) {
-            if let scores = try? await CalculateImageAestheticsScoresRequest().perform(on: image) {
-                result.aesthetics = Double(scores.overallScore)
-            }
-        }
+        // Estetik puanı bilerek hesaplanmıyor: en pahalı istekti, öneriye katkısı küçüktü.
         return result
     }
 
