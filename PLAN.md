@@ -21,7 +21,7 @@
 
 ## Sürüm 0.3 — hız ve süreklilik
 
-- [x] Analiz önbelleği (ikili plist); taramada her 300 fotoğrafta ara kayıt, tarama sürerken ekran kilitlenmez: kimlik + değişiklik tarihi; ikinci tarama yalnızca yeni ya da değişen fotoğrafları işler
+- [x] Analiz önbelleği (ikili plist); taramada 2 dakikada bir ara kayıt, tarama sürerken ekran kilitlenmez: kimlik + değişiklik tarihi; ikinci tarama yalnızca yeni ya da değişen fotoğrafları işler
 - [ ] Kütüphane değişikliklerini dinleme (PHPhotoLibraryChangeObserver)
 - [x] Durdur düğmesi: o ana kadarki sonuçları gösterir, sonraki tarama kaldığı yerden sürer
 - [ ] Şarjdayken arka planda tarama (BGProcessingTask)

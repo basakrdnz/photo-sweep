@@ -245,7 +245,7 @@ private struct ScanningView: View {
             .frame(width: 220, height: 220)
 
             VStack(spacing: 6) {
-                Text("Fotoğraflar inceleniyor")
+                Text(model.isLoadingCache ? "Önceki tarama yükleniyor…" : "Fotoğraflar inceleniyor")
                     .font(.title3.bold())
                 if let remaining = model.estimatedRemaining, remaining > 5 {
                     Text("Yaklaşık \(remainingText(remaining)) kaldı")

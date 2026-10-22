@@ -136,6 +136,8 @@ final class ScanModel {
     private(set) var isLimitedAccess = false
     /// Kalan süre tahmini (saniye); yeterli örnek yokken nil.
     private(set) var estimatedRemaining: TimeInterval?
+    /// Önceki taramanın sonuçları diskten okunurken true.
+    private(set) var isLoadingCache = false
     var selectedForDeletion: Set<String> = []
     var errorMessage: String?
     /// Silmeden sonra gösterilen bilgi.
@@ -145,7 +147,7 @@ final class ScanModel {
     /// Aynı anda analiz edilen fotoğraf sayısı.
     /// Yeni iPhone'larda 6 çekirdek var; analiz çoğunlukla Neural Engine'de
     /// olsa da önizleme yükleme ve gri dönüşüm çekirdeklere yayılır.
-    private let concurrency = min(8, max(4, ProcessInfo.processInfo.activeProcessorCount))
+    private let concurrency = min(6, max(4, ProcessInfo.processInfo.activeProcessorCount))
     /// Bu boyutun üstündeki videolar "büyük" sayılır.
     private let largeVideoBytes: Int64 = 100_000_000
 
@@ -326,9 +328,11 @@ final class ScanModel {
         phase = .scanning(done: 0, total: library.count)
 
         // Değişmemiş fotoğraflar önbellekten gelir; yalnızca yeniler analiz edilir.
+        isLoadingCache = !fromScratch
         let cache = fromScratch
             ? [:]
             : await Task.detached(priority: .userInitiated) { AnalysisCache.load() }.value
+        isLoadingCache = false
         var analyses: [String: CachedAnalysis] = [:]
         var pending: [PHAsset] = []
         for asset in library {
@@ -348,6 +352,7 @@ final class ScanModel {
         defer { UIApplication.shared.isIdleTimerDisabled = false }
 
         let started = Date.now
+        var lastSave = Date.now
         var processed = 0
         var skipped = 0
         await withTaskGroup(of: (String, CachedAnalysis?).self) { group in
@@ -367,7 +372,9 @@ final class ScanModel {
                 }
                 processed += 1
                 // Ara kayıt: uygulama kapanırsa sonraki tarama buradan devam eder.
-                if processed % 300 == 0 {
+                // Önbellek dosyası büyük; sık yazmak taramayı yavaşlatır.
+                if Date.now.timeIntervalSince(lastSave) > 120 {
+                    lastSave = .now
                     saveCache(analyses)
                 }
                 if processed >= 20 {
