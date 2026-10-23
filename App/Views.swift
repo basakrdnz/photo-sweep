@@ -233,7 +233,8 @@ private struct ScanningView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 0.3), value: fraction)
                 VStack(spacing: 4) {
-                    Text(fraction, format: .percent.precision(.fractionLength(0)))
+                    // Yukarı yuvarlanırsa son birkaç fotoğraf sürerken "%100" görünür.
+                    Text(fraction, format: .percent.precision(.fractionLength(0)).rounded(rule: .down))
                         .font(.system(size: 44, weight: .bold, design: .rounded))
                         .contentTransition(.numericText())
                     Text("\(done) / \(total)")

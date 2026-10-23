@@ -361,7 +361,11 @@ final class ScanModel {
                 guard next < pending.count, !Task.isCancelled else { return }
                 let asset = pending[next]
                 next += 1
-                group.addTask { (asset.localIdentifier, await Self.analyze(asset)) }
+                // Takılan bir fotoğraf (galeri ya da Vision yanıt vermezse) taramayı
+                // bekletmesin: 30 saniyede bitmezse atlanır, sonraki taramada yeniden denenir.
+                group.addTask {
+                    (asset.localIdentifier, await withTimeout(seconds: 30) { await Self.analyze(asset) })
+                }
             }
             for _ in 0..<concurrency { enqueue() }
             for await (id, entry) in group {
@@ -507,5 +511,60 @@ final class ScanModel {
             ),
             labels: analysis.labels
         )
+    }
+}
+
+/// İşlem süre içinde biterse sonucunu, bitmezse ya da görev iptal edilirse nil döner.
+/// İşlemin kendisi arka planda sürebilir; bekleyen taraf onu beklemez.
+func withTimeout<T: Sendable>(
+    seconds: Double,
+    _ operation: @escaping @Sendable () async -> T?
+) async -> T? {
+    let once = ResumeOnce<T>()
+    return await withTaskCancellationHandler {
+        await withCheckedContinuation { continuation in
+            once.store(continuation)
+            Task {
+                let value = await operation()
+                once.resume(with: value)
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                once.resume(with: nil)
+            }
+        }
+    } onCancel: {
+        once.resume(with: nil)
+    }
+}
+
+/// Bir devamı yalnızca bir kez sürdürür; kim önce gelirse onun değeri geçer.
+private final class ResumeOnce<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T?, Never>?
+    private var finished = false
+
+    func store(_ continuation: CheckedContinuation<T?, Never>) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            continuation.resume(returning: nil)
+        } else {
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func resume(with value: T?) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: value)
     }
 }
