@@ -48,6 +48,29 @@ enum PhotoLibrary {
         }
     }
 
+    /// Boyutları paralel hesaplar. Her çağrı bloklayan bir PhotoKit sorgusu
+    /// olduğundan Swift'in ortak havuzu yerine GCD'de çalışır.
+    static func fileSizes(of assets: [PHAsset]) async -> [String: Int64] {
+        guard !assets.isEmpty else { return [:] }
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                var sizes = [Int64](repeating: 0, count: assets.count)
+                sizes.withUnsafeMutableBufferPointer { buffer in
+                    let base = buffer.baseAddress!
+                    DispatchQueue.concurrentPerform(iterations: assets.count) { index in
+                        base[index] = fileSize(of: assets[index])
+                    }
+                }
+                var result: [String: Int64] = [:]
+                result.reserveCapacity(assets.count)
+                for (asset, size) in zip(assets, sizes) {
+                    result[asset.localIdentifier] = size
+                }
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
     static func assets(withIDs ids: [String]) -> [PHAsset] {
         let result = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
         var assets: [PHAsset] = []

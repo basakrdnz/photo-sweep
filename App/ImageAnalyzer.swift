@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import SweepCore
 import Vision
 
@@ -21,7 +22,23 @@ enum ImageAnalyzer {
     private static let documentHints = ContentCategory.document.identifiers
         .union(["text", "screenshot", "poster", "sign", "chart", "diagram", "calendar"])
 
+    /// Vision istekleri ve piksel işleri çağıran iş parçacığını bloklar.
+    /// Swift'in ortak iş parçacığı havuzunda çalışırlarsa havuz dolar; zaman
+    /// aşımı dahil hiçbir async iş ilerleyemez ve tarama kilitlenir. Bu yüzden
+    /// ayrı bir GCD kuyruğunda çalışırlar; eşzamanlılığı tarama sınırlar.
+    private static let queue = DispatchQueue(
+        label: "photosweep.analysis",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
     static func analyze(_ image: CGImage) async -> Result {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume(returning: analyzeBlocking(image)) }
+        }
+    }
+
+    private static func analyzeBlocking(_ image: CGImage) -> Result {
         var result = Result()
         if let gray = grayImage(from: image) {
             result.differenceHash = DifferenceHash.compute(gray)

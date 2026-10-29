@@ -145,9 +145,9 @@ final class ScanModel {
 
     private var scanTask: Task<Void, Never>?
     /// Aynı anda analiz edilen fotoğraf sayısı.
-    /// Yeni iPhone'larda 6 çekirdek var; analiz çoğunlukla Neural Engine'de
-    /// olsa da önizleme yükleme ve gri dönüşüm çekirdeklere yayılır.
-    private let concurrency = min(6, max(4, ProcessInfo.processInfo.activeProcessorCount))
+    /// Vision ve Neural Engine paylaşıldığı için 4'ün üstü hızlandırmıyor,
+    /// yalnızca bellek ve ısı artıyor.
+    private let concurrency = 4
     /// Bu boyutun üstündeki videolar "büyük" sayılır.
     private let largeVideoBytes: Int64 = 100_000_000
 
@@ -429,12 +429,7 @@ final class ScanModel {
             .reduce(into: Set(groups.flatMap(\.memberIDs))) { $0.formUnion($1) }
             .union(selfieSet)
         let sizeTargets = candidates.compactMap { assets[$0] } + videos
-        sizes = await Task.detached(priority: .userInitiated) {
-            Dictionary(
-                sizeTargets.map { ($0.localIdentifier, PhotoLibrary.fileSize(of: $0)) },
-                uniquingKeysWith: { first, _ in first }
-            )
-        }.value
+        sizes = await PhotoLibrary.fileSizes(of: sizeTargets)
         flat[.selfies] = library.reversed().map(\.localIdentifier).filter(selfieSet.contains)
         let recordings = videos.filter { $0.mediaSubtypes.contains(.videoScreenRecording) }
         flat[.screenRecordings] = recordings
@@ -453,15 +448,12 @@ final class ScanModel {
         phase = .finished
     }
 
-    /// Kayıtlar sırayla yazılır; bir önceki yazım sürerken yenisi sıraya girer.
-    @ObservationIgnored private var saveTask: Task<Void, Never>?
+    /// Kayıtlar sırayla yazılır. Büyük dosyayı kodlamak saniyeler sürer ve
+    /// iş parçacığını bloklar; bu yüzden Swift'in ortak havuzu yerine ayrı kuyrukta.
+    private static let saveQueue = DispatchQueue(label: "photosweep.cache-save", qos: .utility)
 
     private func saveCache(_ entries: [String: CachedAnalysis]) {
-        let previous = saveTask
-        saveTask = Task.detached(priority: .utility) {
-            await previous?.value
-            AnalysisCache.save(entries)
-        }
+        Self.saveQueue.async { AnalysisCache.save(entries) }
     }
 
     private func remove(_ removed: Set<String>) {
