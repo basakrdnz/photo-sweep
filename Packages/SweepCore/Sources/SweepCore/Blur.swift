@@ -12,7 +12,7 @@ public enum BlurCheck {
 
     public static func isLikelyBlurry(_ record: PhotoRecord) -> Bool {
         let quality = record.quality
-        guard !quality.isFavorite else { return false }
+        guard !quality.isFavorite, !record.isVideo else { return false }
         if let focus = quality.focus {
             guard (quality.contrast ?? .infinity) >= minimumContrast else { return false }
             return focus < focusThreshold

@@ -11,6 +11,10 @@ public struct PhotoRecord: Sendable, Equatable, Identifiable {
     public let quality: QualitySignals
     /// Cihazdaki sınıflandırıcının etiketleri ve güvenleri (yalnızca ilgili olanlar).
     public let labels: [String: Float]
+    /// Videonun süresi (saniye); fotoğraflarda nil. Videolar kapak karesinden analiz edilir.
+    public let duration: Double?
+
+    public var isVideo: Bool { duration != nil }
 
     public init(
         id: String,
@@ -20,7 +24,8 @@ public struct PhotoRecord: Sendable, Equatable, Identifiable {
         differenceHash: UInt64?,
         features: FeatureVector?,
         quality: QualitySignals = QualitySignals(),
-        labels: [String: Float] = [:]
+        labels: [String: Float] = [:],
+        duration: Double? = nil
     ) {
         self.id = id
         self.creationDate = creationDate
@@ -30,6 +35,7 @@ public struct PhotoRecord: Sendable, Equatable, Identifiable {
         self.features = features
         self.quality = quality
         self.labels = labels
+        self.duration = duration
     }
 
     var pixelCount: Int { pixelWidth * pixelHeight }

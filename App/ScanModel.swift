@@ -131,6 +131,9 @@ final class ScanModel {
     private(set) var sizes: [String: Int64] = [:]
     /// Telefonda önizlemesi olmadığı (yalnızca iCloud'da durduğu) için analiz edilemeyenler.
     private(set) var skippedCount = 0
+    /// Son taramadaki fotoğraf ve video sayıları (galerinin altındaki sayılarla aynı).
+    private(set) var photoCount = 0
+    private(set) var videoCount = 0
     private(set) var wasCancelled = false
     /// Kullanıcı yalnızca seçtiği fotoğraflara erişim verdiyse.
     private(set) var isLimitedAccess = false
@@ -325,7 +328,12 @@ final class ScanModel {
             (library + videos).map { ($0.localIdentifier, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        phase = .scanning(done: 0, total: library.count)
+        // Videolar da kapak karelerinden analiz edilir; böylece galerideki
+        // toplamla aynı sayıda öğe taranır ve video kopyaları da bulunur.
+        let media = library + videos
+        photoCount = library.count
+        videoCount = videos.count
+        phase = .scanning(done: 0, total: media.count)
 
         // Değişmemiş fotoğraflar önbellekten gelir; yalnızca yeniler analiz edilir.
         isLoadingCache = !fromScratch
@@ -335,7 +343,7 @@ final class ScanModel {
         isLoadingCache = false
         var analyses: [String: CachedAnalysis] = [:]
         var pending: [PHAsset] = []
-        for asset in library {
+        for asset in media {
             // Düzenlenmemiş fotoğrafın içeriği değişmez; iCloud eşitlemesi gibi
             // nedenlerle değişen tarih yeniden analiz gerektirmez.
             if let entry = cache[asset.localIdentifier],
@@ -345,7 +353,7 @@ final class ScanModel {
                 pending.append(asset)
             }
         }
-        phase = .scanning(done: analyses.count, total: library.count)
+        phase = .scanning(done: analyses.count, total: media.count)
 
         // Tarama sürerken ekran kilitlenmesin; kilitlenirse iOS uygulamayı durdurur.
         UIApplication.shared.isIdleTimerDisabled = true
@@ -398,7 +406,7 @@ final class ScanModel {
         // Silinmiş fotoğrafların kayıtları da böylece önbellekten düşer.
         saveCache(analyses)
 
-        let analyzed = library.compactMap { asset in
+        let analyzed = media.compactMap { asset in
             analyses[asset.localIdentifier].map { Self.record(for: asset, analysis: $0) }
         }
         records = Dictionary(uniqueKeysWithValues: analyzed.map { ($0.id, $0) })
@@ -407,7 +415,7 @@ final class ScanModel {
             .filter { $0.mediaSubtypes.contains(.photoScreenshot) }
             .map(\.localIdentifier)
         let screenshotSet = Set(screenshots)
-        let photos = analyzed.reversed().filter { !screenshotSet.contains($0.id) }
+        let photos = analyzed.reversed().filter { !$0.isVideo && !screenshotSet.contains($0.id) }
         // Gruplama büyük arşivde bir saniyeyi bulabilir; arayüzü kilitlemesin.
         groups = await Task.detached(priority: .userInitiated) { Grouper.group(analyzed) }.value
 
@@ -501,7 +509,8 @@ final class ScanModel {
                 aesthetics: analysis.aesthetics,
                 isFavorite: asset.isFavorite
             ),
-            labels: analysis.labels
+            labels: analysis.labels,
+            duration: asset.mediaType == .video ? asset.duration : nil
         )
     }
 }

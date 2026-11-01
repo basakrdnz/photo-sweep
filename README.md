@@ -2,6 +2,8 @@
 
 iPhone'daki fotoğraf arşivini tarayıp kopya ve benzer fotoğrafları gruplayan, her grupta hangisinin saklanacağını öneren ve seçtiklerinizi silmenize yardım eden uygulama. Ekran görüntülerini, bulanık fotoğrafları, belge/sayfa, yemek, manzara ve hayvan fotoğraflarını ve büyük videoları da listeler; her kategoride açılacak alanı gösterir. Sonuçlar tarih aralığına göre süzülebilir. "Hızlı gözden geçir" ile galeri ay ay kaydırılarak ayıklanır (sola sil, sağa sakla). Selfie, ekran kaydı ve 3 saniyeden kısa video kategorileri de vardır.
 
+Videolar da kapak karelerinden taranır ve yalnızca süresi en fazla 1 saniye farklı videolarla karşılaştırılır.
+
 Arkadaşlara dağıtım: [DAGITIM.md](DAGITIM.md).
 
 - **Gizli:** Tüm analiz telefonda yapılır. Sunucu yok, hiçbir fotoğraf dışarı gönderilmez.
@@ -11,7 +13,7 @@ Arkadaşlara dağıtım: [DAGITIM.md](DAGITIM.md).
 
 | Katman | Neyi bulur | Yöntem | Nerede aranır |
 |---|---|---|---|
-| Kopya | Aynı fotoğrafın kopyası, küçültülmüş ya da sıkıştırılmış hali | 64 bit görsel parmak izi (dHash), en fazla 4 bit fark, aynı en-boy oranı; feature print varsa o da yakın olmalı | Tüm arşiv |
+| Kopya | Aynı fotoğrafın ya da videonun kopyası, küçültülmüş ya da sıkıştırılmış hali | 64 bit görsel parmak izi (dHash), en fazla 4 bit fark, aynı en-boy oranı; feature print varsa o da yakın olmalı | Tüm arşiv |
 | Benzer | Aynı sahneden art arda çekilmiş kareler | Vision feature print uzaklığı (yoksa yakın dHash); uzun zincirler kümenin en az yarısına benzerlik şartıyla bölünür | Aralarında en fazla 2 dakika olan fotoğraflar |
 | Bulanık | Her yeri bulanık kareler | 256 piksellik önizlemenin 4x4 bölgesinden en netinin Laplace varyansı; düşük kontrastlı (düz) kareler ve favoriler hariç, otomatik seçilmez | Tüm arşiv |
 | Belge, Yemek, Manzara, Hayvan | İçerik | Vision sınıflandırıcısının etiketleri; belgede sayfa algılayıcısı (sayfa karenin üçte birini kaplamalı), hayvanda kedi/köpek tanıyıcısı da kullanılır. Yüz olan kareler belge ya da manzara sayılmaz; hiçbiri otomatik seçilmez | Tüm arşiv |

@@ -72,6 +72,7 @@ public enum Grouper {
             for second in hashed.indices[(first + 1)...] {
                 let (j, hashB) = hashed[second]
                 if DifferenceHash.distance(hashA, hashB) <= options.duplicateHashDistance,
+                   mediaMatches(records[i], records[j]),
                    aspectRatiosMatch(records[i], records[j], tolerance: options.aspectRatioTolerance),
                    featuresAgree(records[i], records[j], options: options) {
                     duplicates.union(i, j)
@@ -164,11 +165,22 @@ public enum Grouper {
         return clusters.map { $0.flatMap { $0 } }
     }
 
+    /// Fotoğraf yalnızca fotoğrafla, video yalnızca süresi en fazla 1 saniye
+    /// farklı videoyla karşılaştırılır; aynı kapak karesi tek başına yetmez.
+    private static func mediaMatches(_ a: PhotoRecord, _ b: PhotoRecord) -> Bool {
+        switch (a.duration, b.duration) {
+        case (nil, nil): true
+        case let (left?, right?): abs(left - right) <= 1
+        default: false
+        }
+    }
+
     private static func areSimilar(
         _ a: PhotoRecord,
         _ b: PhotoRecord,
         options: GroupingOptions
     ) -> Bool {
+        guard mediaMatches(a, b) else { return false }
         // Feature print varsa karar onundur; dHash sahne içeriğini kaba
         // ölçtüğü için iki fotoğrafı tek başına benzer saymaya yetmez.
         if let featuresA = a.features, let featuresB = b.features,

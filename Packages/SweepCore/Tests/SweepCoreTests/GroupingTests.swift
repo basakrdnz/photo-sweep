@@ -99,6 +99,22 @@ private func record(
         #expect(groups.isEmpty)
     }
 
+    @Test func videosOnlyMatchVideosOfSimilarLength() {
+        func clip(_ id: String, _ seconds: Double?, at time: Double) -> PhotoRecord {
+            PhotoRecord(id: id, creationDate: base.addingTimeInterval(time), pixelWidth: 1920, pixelHeight: 1080,
+                        differenceHash: 99, features: FeatureVector([0]), duration: seconds)
+        }
+        let groups = Grouper.group([
+            clip("video", 12, at: 0),
+            clip("video-copy", 12.4, at: 86_400),
+            clip("other-length", 40, at: 5),
+            clip("photo", nil, at: 3),
+        ])
+        #expect(groups.count == 1)
+        #expect(Set(groups[0].memberIDs) == ["video", "video-copy"])
+        #expect(groups[0].kind == .duplicate)
+    }
+
     @Test func mixedGroupIsSimilar() {
         let groups = Grouper.group([
             record("a", seconds: 0, hash: 7, features: [0]),

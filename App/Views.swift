@@ -246,7 +246,7 @@ private struct ScanningView: View {
             .frame(width: 220, height: 220)
 
             VStack(spacing: 6) {
-                Text(model.isLoadingCache ? "Önceki tarama yükleniyor…" : "Fotoğraflar inceleniyor")
+                Text(model.isLoadingCache ? "Önceki tarama yükleniyor…" : "Fotoğraf ve videolar inceleniyor")
                     .font(.title3.bold())
                 if let remaining = model.estimatedRemaining, remaining > 5 {
                     Text("Yaklaşık \(remainingText(remaining)) kaldı")
@@ -381,11 +381,14 @@ private struct SummaryView: View {
                     }
                 }
 
-                if model.skippedCount > 0 {
-                    Text("\(model.skippedCount) fotoğraf yalnızca iCloud'da durduğu için taranamadı.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Taranan: \(model.photoCount) fotoğraf, \(model.videoCount) video. Gizli albüm taranmaz.")
+                    if model.skippedCount > 0 {
+                        Text("\(model.skippedCount) öğe yalnızca iCloud'da durduğu için taranamadı.")
+                    }
                 }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
             .padding(16)
         }
