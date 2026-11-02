@@ -1001,9 +1001,10 @@ private struct ReviewMonthsView: View {
         List {
             Section {
                 ForEach(model.reviewMonths) { month in
-                    let pending = month.ids.filter { !model.keptInReview.contains($0) && model.assets[$0] != nil }
+                    let existing = month.ids.filter { model.assets[$0] != nil }
+                    let pending = existing.filter { !model.keptInReview.contains($0) }
                     NavigationLink {
-                        SwipeReviewView(title: month.title, ids: pending)
+                        MonthReviewView(title: month.title, ids: existing)
                     } label: {
                         HStack {
                             Text(month.title)
@@ -1013,10 +1014,10 @@ private struct ReviewMonthsView: View {
                                 .monospacedDigit()
                         }
                     }
-                    .disabled(pending.isEmpty)
+                    .disabled(existing.isEmpty)
                 }
             } footer: {
-                Text("Sola kaydırdıkların silinmek üzere işaretlenir, sağa kaydırdıkların bir daha karşına çıkmaz. Bitirince işaretlediklerini tek seferde silersin.")
+                Text("Kaydır: sola kaydırdıkların silinmek üzere işaretlenir, sağa kaydırdıkların bir daha karşına çıkmaz. Izgara: ayın tüm fotoğraf ve videolarını görüp seçerek toplu silersin.")
             }
             if !model.keptInReview.isEmpty {
                 Section {
@@ -1027,6 +1028,110 @@ private struct ReviewMonthsView: View {
             }
         }
         .navigationTitle("Hızlı gözden geçir")
+    }
+}
+
+/// Bir ay: kaydırarak tek tek ya da ızgarada toplu gözden geçirme.
+/// Seçimler iki görünümde ortaktır.
+private struct MonthReviewView: View {
+    @Environment(ScanModel.self) private var model
+    let title: String
+    let ids: [String]
+
+    private enum Mode { case swipe, grid }
+    @State private var mode = Mode.swipe
+    /// Kaydırma oturumu, görünüme her dönüşte kalanlarla yeniden başlar.
+    @State private var swipeIDs: [String] = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Görünüm", selection: $mode) {
+                Text("Kaydır").tag(Mode.swipe)
+                Text("Izgara").tag(Mode.grid)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            switch mode {
+            case .swipe:
+                if swipeIDs.isEmpty {
+                    ContentUnavailableView(
+                        "Bu ay için kaydıracak bir şey kalmadı",
+                        systemImage: "checkmark.circle",
+                        description: Text("Izgarada ayın tüm fotoğraf ve videolarını görebilirsin.")
+                    )
+                    .frame(maxHeight: .infinity)
+                } else {
+                    SwipeReviewView(title: title, ids: swipeIDs)
+                        .id(swipeIDs)
+                }
+            case .grid:
+                MonthGridView(ids: ids)
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { refreshSwipe() }
+        .onChange(of: mode) { _, newMode in
+            if newMode == .swipe { refreshSwipe() }
+        }
+    }
+
+    /// Saklananlar ve zaten silinmek üzere seçilenler yeniden gösterilmez.
+    private func refreshSwipe() {
+        swipeIDs = ids.filter {
+            model.assets[$0] != nil
+                && !model.keptInReview.contains($0)
+                && !model.selectedForDeletion.contains($0)
+        }
+    }
+}
+
+private struct MonthGridView: View {
+    @Environment(ScanModel.self) private var model
+    let ids: [String]
+    @State private var viewer: ViewerItem?
+
+    private let columns = [GridItem(.adaptive(minimum: 110), spacing: 4)]
+
+    var body: some View {
+        let existing = ids.filter { model.assets[$0] != nil }
+        let allSelected = !existing.isEmpty && existing.allSatisfy(model.selectedForDeletion.contains)
+        ScrollView {
+            HStack {
+                Text("\(existing.count) öğe · dokunarak seç")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(allSelected ? "Seçimi kaldır" : "Tümünü seç") {
+                    withAnimation { model.setSelected(existing, !allSelected) }
+                }
+                .disabled(existing.isEmpty)
+            }
+            .font(.footnote)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(existing, id: \.self) { id in
+                    SelectableThumbnail(id: id, isSuggested: false, showsSize: true) {
+                        viewer = ViewerItem(ids: existing, start: id)
+                    }
+                }
+            }
+            .padding(4)
+        }
+        .overlay {
+            if existing.isEmpty {
+                ContentUnavailableView("Bu ay temizlendi", systemImage: "checkmark.circle")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            DeleteBar(ids: existing)
+        }
+        .fullScreenCover(item: $viewer) { item in
+            PhotoViewer(item: item, suggestedID: nil)
+        }
+        .task(id: ids) { await model.ensureSizes(for: ids) }
     }
 }
 
@@ -1054,8 +1159,6 @@ private struct SwipeReviewView: View {
             }
         }
         .padding()
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if index < ids.count && !decisions.isEmpty {
                 Button("Bitir") { index = ids.count }

@@ -464,8 +464,17 @@ final class ScanModel {
         Self.saveQueue.async { AnalysisCache.save(entries) }
     }
 
+    /// Boyutu henüz bilinmeyenlerin (ör. bir ayın tüm fotoğrafları) boyutunu hesaplar.
+    func ensureSizes(for ids: [String]) async {
+        let missing = ids.compactMap { sizes[$0] == nil ? assets[$0] : nil }
+        guard !missing.isEmpty else { return }
+        let found = await PhotoLibrary.fileSizes(of: missing)
+        sizes.merge(found) { current, _ in current }
+    }
+
     private func remove(_ removed: Set<String>) {
         selectedForDeletion.subtract(removed)
+        for id in removed { assets[id] = nil }
         groups = groups.compactMap { group in
             let remaining = group.memberIDs.filter { !removed.contains($0) }
             guard remaining.count > 1 else { return nil }
